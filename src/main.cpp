@@ -1,3 +1,5 @@
+#include "ADASFeature.h"
+#include "LaneDeparture.h"
 #include <cstdlib>
 #include <iostream>
 #include <opencv2/opencv.hpp>
@@ -5,7 +7,7 @@
 
 struct AppConfig {
   // Will change type to the interface
-  std::vector<std::string> features{};
+  std::vector<std::shared_ptr<ADASFeature>> features{};
   std::optional<std::string> store_filename;
   std::string video_source{};
   bool show_help{false};
@@ -44,6 +46,11 @@ int main(int argc, char **argv) {
     // Exit if no frame captured
     if (frame.empty())
       break;
+    // Display result/s
+    for (auto &feature : config->features) {
+      cv::Mat feature_frame = feature->process(frame);
+      cv::imshow(feature->get_feature_name(), feature_frame);
+    }
     // Save output to video filename if set
     if (config->store_filename.has_value()) {
       if (!writer.isOpened()) {
@@ -56,11 +63,8 @@ int main(int argc, char **argv) {
           return EXIT_FAILURE;
         }
       }
+      // Needs to change to write the merged features.
       writer.write(frame);
-    }
-    // Display result/s
-    for (auto &feature : config->features) {
-      cv::imshow(feature,frame);
     }
   }
   // Manual Clean Up, not really needed with RAII
@@ -105,8 +109,12 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
     std::stringstream ss(features);
     std::string feature;
     while (std::getline(ss, feature, ',')) {
-      if (feature == "stops" || feature == "lanes" || feature == "objects") {
-        config.features.push_back(feature);
+      if (feature == "lanes") {
+        config.features.push_back(std::make_shared<LaneDeparture>());
+      } else if (feature == "objects") {
+        std::cout << "Object Detection feature not implemented\n";
+      } else if (feature == "stops") {
+        std::cout << "Stop Detection feature not implemented\n";
       }
     }
   }
