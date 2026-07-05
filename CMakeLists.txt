@@ -16,7 +16,10 @@ endif()
 
 find_package(OpenCV REQUIRED)
 
-add_executable(DriveMe src/main.cpp)
+add_executable(DriveMe src/main.cpp
+        src/ADASFeature.h
+        src/LaneDeparture.cpp
+        src/LaneDeparture.h)
 target_link_libraries(DriveMe PRIVATE ${OpenCV_LIBS})
 
 message(STATUS "OpenCV include dirs: ${OpenCV_INCLUDE_DIRS}")
