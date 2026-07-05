@@ -4,6 +4,7 @@
 #include <optional>
 
 struct AppConfig {
+  // Will change type to the interface
   std::vector<std::string> features{};
   std::optional<std::string> store_filename;
   std::string video_source{};
@@ -30,12 +31,12 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
+  // Set up video writer for storing results onto a video
   cv::VideoWriter writer;
   double fps = cap.get(cv::CAP_PROP_FPS);
-  if (fps < 1.0 || fps > 240.0)
-    // Cap at 30 fps
-    fps = 30.0;
-  std::string src_win_name = "Source";
+  if (fps < 1.0 || fps > 60.0)
+    fps = 30.0; // Cap at 30 fps
+
   constexpr int ESCAPE_KEY = 27;
   cv::Mat frame, dst;
   for (int input_key = 0; input_key != ESCAPE_KEY && cap.read(frame);
@@ -50,7 +51,7 @@ int main(int argc, char **argv) {
                     cv::VideoWriter::fourcc('m', 'p', '4', 'v'), fps,
                     frame.size());
         if (!writer.isOpened()) {
-          // Check again if failed
+          // Check again if writer failed to open
           std::cerr << "Failed to open output video stream\n";
           return EXIT_FAILURE;
         }

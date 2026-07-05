@@ -83,3 +83,6 @@ test-data/
 
 # Python virtual enviornment
 .venv
+
+# Any video data produced in root
+*.mp4
