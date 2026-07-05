@@ -2,11 +2,12 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <optional>
-#include <variant>
 
 struct AppConfig {
-  std::string method{"houghp"};
-  std::variant<int, std::string> video_source;
+  std::vector<std::string> features{};
+  std::optional<std::string> store_filename;
+  std::string video_source{};
+  bool show_help{false};
 };
 
 std::optional<AppConfig> parse_arguments(int argc, char **argv);
@@ -17,30 +18,49 @@ int main(int argc, char **argv) {
   if (!config) {
     return EXIT_FAILURE;
   }
-
-  // Set up video capture from video or from camera.
-  cv::VideoCapture cap{};
-  if (std::holds_alternative<int>(config->video_source)) {
-    int camera_id = std::get<int>(config->video_source);
-    cap.open(camera_id);
-  } else if (std::holds_alternative<std::string>(config->video_source)) {
-    auto file_path = std::get<std::string>(config->video_source);
-    cap.open(file_path);
+  if (config->show_help) {
+    return EXIT_SUCCESS;
   }
+
+  // Set up video capture from video
+  cv::VideoCapture cap{};
+  cap.open(config->video_source);
   if (!cap.isOpened()) {
     std::cerr << "Failed to open video from source\n";
     return EXIT_FAILURE;
   }
 
+  cv::VideoWriter writer;
+  double fps = cap.get(cv::CAP_PROP_FPS);
+  if (fps < 1.0 || fps > 240.0)
+    // Cap at 30 fps
+    fps = 30.0;
   std::string src_win_name = "Source";
   constexpr int ESCAPE_KEY = 27;
   cv::Mat frame, dst;
   for (int input_key = 0; input_key != ESCAPE_KEY && cap.read(frame);
        input_key = cv::waitKey(1)) {
-    if (frame.empty()) {
+    // Exit if no frame captured
+    if (frame.empty())
       break;
+    // Save output to video filename if set
+    if (config->store_filename.has_value()) {
+      if (!writer.isOpened()) {
+        writer.open(config->store_filename.value(),
+                    cv::VideoWriter::fourcc('m', 'p', '4', 'v'), fps,
+                    frame.size());
+        if (!writer.isOpened()) {
+          // Check again if failed
+          std::cerr << "Failed to open output video stream\n";
+          return EXIT_FAILURE;
+        }
+      }
+      writer.write(frame);
     }
-    cv::imshow("Source", frame);
+    // Display result/s
+    for (auto &feature : config->features) {
+      cv::imshow(feature,frame);
+    }
   }
   // Manual Clean Up, not really needed with RAII
   cap.release();
@@ -51,28 +71,48 @@ int main(int argc, char **argv) {
 std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
   const std::string keys = {
       "{help h | | Print this message.}"
-      "{video v |  | Video source file name to perform Hough Lines.}"
-      "{camera c | 0 | Camera device ID. Default if no args are passed. Set "
-      "with 0 as default built-in "
-      "camera.}"};
+      "{video v | | Video file name}"
+      "{show s | | Features to show separated by commas. Example: "
+      "--show=stops,lanes,objects}"
+      "{store o | | Store the results back in a video file name.}"};
 
   const cv::CommandLineParser parser{argc, argv, keys};
-  if (parser.has("help") || !parser.check()) {
-    parser.printMessage();
-    if (!parser.check()) {
-      parser.printErrors();
-    }
+  if (!parser.check()) {
+    parser.printErrors();
     return std::nullopt;
   }
 
-  AppConfig config;
-  int camera_id = parser.get<int>("camera");
-  if (auto video_file = parser.get<std::string>("video"); !video_file.empty()) {
+  AppConfig config{};
+  // --help
+  if (parser.has("help")) {
+    parser.printMessage();
+    config.show_help = true;
+    return config;
+  }
+  // --video=
+  if (const auto video_file = parser.get<std::string>("video");
+      !video_file.empty()) {
     config.video_source = video_file;
     std::cout << "Using video file: " << video_file << '\n';
   } else {
-    config.video_source = camera_id;
-    std::cout << "Using camera with id " << camera_id << '\n';
+    std::cerr << "You must specify a video file.\nSee --help for more info.";
+    return std::nullopt;
+  }
+  // --show=
+  if (const auto features = parser.get<std::string>("show");
+      !features.empty()) {
+    std::stringstream ss(features);
+    std::string feature;
+    while (std::getline(ss, feature, ',')) {
+      if (feature == "stops" || feature == "lanes" || feature == "objects") {
+        config.features.push_back(feature);
+      }
+    }
+  }
+  // --store=
+  if (auto out_video = parser.get<std::string>("store"); !out_video.empty()) {
+    config.store_filename = out_video;
+    std::cout << "Saving results to video filename: " << out_video << '\n';
   }
   return config;
 }
