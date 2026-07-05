@@ -70,3 +70,13 @@ Testing/
 
 # Ignore test data which can be up to 20GB
 test-data/
+
+# CLion IDE metadata
+.idea/
+
+# VScode metadata
+.vscode
+
+# Mac OS metadata
+.DS_Store
+.DS_Store?
