@@ -1,6 +1,6 @@
-# Exercise 5 Extended Lab Propsoal and Exploratory Code
+# Exercise 5 Extended Lab Proposal and Exploratory Code
 
-AV/ADAS with C++ OpenCV, Nvidia Jetson. With lane departure warning system, stop detection with HOG, and on-the-road object detection with machine learning using YOLO.
+AV/ADAS with C++ OpenCV, Nvidia Jetson. With lane departure warning system(Amiel), stop detection with HOG (Julia), and on-the-road object detection with machine learning using YOLO(Carlos).
 
 ## Requirements
 
@@ -30,17 +30,22 @@ make -C build
 ## Project Directory Structure
 
 ```bash
-.
-├── build
-│   └── DriveMe
-├── data
-├── docs
-├── src
-└── test-data
+Exercise5CSCI612/
+├── CMakeLists.txt
+├── build/
+│   │── DriveMe
+│   └── Makefile
+├── data/
+├── docs/
+├── README.md
+├── src/
+└── test-data/
 ```
 
 - build: where all build files are located including the Makefile and program executable
 - data: All generated output from the exercise
 - docs: Resources and documentation for this bash
-- src: All source files produced for this exercise including C++ headers and implementations along with Python scripts
-- test-data: Used for development only where we store our sample video files to test
+- src: All source files produced for this exercise including
+C++ headers and implementations along with Python scripts
+- test-data: Used for development only where we store
+our sample video files to test
