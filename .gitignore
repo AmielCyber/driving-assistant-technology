@@ -80,3 +80,6 @@ test-data/
 # Mac OS metadata
 .DS_Store
 .DS_Store?
+
+# Python virtual enviornment
+.venv
