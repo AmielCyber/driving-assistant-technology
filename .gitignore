@@ -86,3 +86,10 @@ test-data/
 
 # Any video data produced in root
 *.mp4
+
+# ignore the entire archive folder
+archive/
+
+# Ignore training data
+src/code-for-stop-sign-training-and-detection/training/archive/
+src/code-for-stop-sign-training-and-detection/training/archive.zip
