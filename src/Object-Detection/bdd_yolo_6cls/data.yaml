@@ -1,0 +1,13 @@
+path: bdd_yolo_6cls
+train: images/train
+val: images/val
+test: images/test
+
+nc: 6
+names:
+  0: car
+  1: bus
+  2: truck
+  3: pedestrian
+  4: motorcycle
+  5: bicycle
