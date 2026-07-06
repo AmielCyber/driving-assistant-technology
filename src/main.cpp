@@ -5,6 +5,8 @@
 #include <opencv2/opencv.hpp>
 #include <optional>
 
+using std::chrono::steady_clock;
+
 struct AppConfig {
   // Will change type to the interface
   std::vector<std::shared_ptr<ADASFeature>> features{};
@@ -14,6 +16,8 @@ struct AppConfig {
 };
 
 std::optional<AppConfig> parse_arguments(int argc, char **argv);
+void put_fps_text(cv::Mat &src, const steady_clock::time_point &start_time,
+                  const steady_clock::time_point &end_time);
 
 int main(int argc, char **argv) {
   // Parse User Arguments if any.
@@ -41,14 +45,21 @@ int main(int argc, char **argv) {
 
   constexpr int ESCAPE_KEY = 27;
   cv::Mat frame, dst;
-  for (int input_key = 0; input_key != ESCAPE_KEY && cap.read(frame);
+  std::chrono::time_point<steady_clock> start_time;
+  std::chrono::time_point<steady_clock> end_time;
+  for (int input_key = 1; input_key != ESCAPE_KEY && cap.read(frame);
        input_key = cv::waitKey(1)) {
     // Exit if no frame captured
     if (frame.empty())
       break;
     // Display result/s
     for (auto &feature : config->features) {
+      // Clock start time
+      start_time = steady_clock::now();
       cv::Mat feature_frame = feature->process(frame);
+      // Clock end time
+      end_time = steady_clock::now();
+      put_fps_text(feature_frame, start_time, end_time);
       cv::imshow(feature->get_feature_name(), feature_frame);
     }
     // Save output to video filename if set
@@ -127,4 +138,14 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
     std::cout << "Saving results to video filename: " << out_video << '\n';
   }
   return config;
+}
+
+void put_fps_text(cv::Mat &src, const steady_clock::time_point &start_time,
+                  const steady_clock::time_point &end_time) {
+  const double elapsed_time =
+      1.0 / std::chrono::duration<double>(end_time - start_time).count();
+  std::stringstream ss{};
+  ss << std::fixed << std::setprecision(1) << elapsed_time << "FPS";
+  cv::putText(src, ss.str(), cv::Point(20, 40), cv::FONT_HERSHEY_SIMPLEX, 0.8,
+              cv::Scalar(0, 255, 255), 2);
 }
