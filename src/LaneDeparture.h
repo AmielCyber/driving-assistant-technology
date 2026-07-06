@@ -13,6 +13,10 @@ public:
   std::string get_feature_name() override;
 private:
   std::string name{"Lane Departure Warning System"};
+  static cv::Mat apply_canny_edge_detection(const cv::Mat& frame);
+  static cv::Mat apply_region_of_interest(const cv::Mat& edges);
+  static std::vector<cv::Vec4i> get_hough_probabilistic_lines(const cv::Mat& frame);
+  static void draw_lines(const std::vector<cv::Vec4i> &lines, cv::Mat& original_frame);
 };
 
 #endif // LANE_DEPARTURE_H
