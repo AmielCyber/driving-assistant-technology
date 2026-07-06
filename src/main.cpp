@@ -63,6 +63,7 @@ int main(int argc, char **argv) {
           return EXIT_FAILURE;
         }
       }
+      /************************** Merge features HERE *************************/
       // Needs to change to write the merged features.
       writer.write(frame);
     }
@@ -112,8 +113,10 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
       if (feature == "lanes") {
         config.features.push_back(std::make_shared<LaneDeparture>());
       } else if (feature == "objects") {
+        /************* Object Detection Implementation HERE ******************/
         std::cout << "Object Detection feature not implemented\n";
       } else if (feature == "stops") {
+        /************* Stop Sign Detection Implementation HERE ****************/
         std::cout << "Stop Detection feature not implemented\n";
       }
     }
