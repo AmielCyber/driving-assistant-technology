@@ -1,5 +1,5 @@
-#include "ADASFeature.h"
-#include "LaneDeparture.h"
+#include "./lane-departure/LaneDeparture.h"
+#include "lane-departure/ADASFeature.h"
 #include <cstdlib>
 #include <iostream>
 #include <opencv2/opencv.hpp>
