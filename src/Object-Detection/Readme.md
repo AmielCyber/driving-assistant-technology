@@ -9,3 +9,26 @@ A samll video is produced during the demo as part of documented the detection ou
 The user can stop the analysis by pressing ESC, "Q", or "q".
 
 A makefile is also included so the source can be compile and then test it.
+
+The training code was built for a MacBook Air M5, to sue multi-GPUs as the training required massive computing power.
+
+The traned model was ported to a Ubuntu24 virtual machine. The best.pt was converted to best.onnx.
+
+To compile the source code onnx_yolo11_video_demo_threaded.cpp in Linux follow this quick reference:
+To select what ONNX library that  you need to install use:
+uname -m
+
+Quick reference
+Linux hardware          	                            uname -m	  ONNX Runtime package
+Intel/AMD PC	                                        x86_64	    onnxruntime-linux-x64-*.tgz
+ARM64 Linux (Apple M VM, Raspberry Pi, RK3588, etc.)  aarch64     onnxruntime-linux-aarch64-*.tgz
+NVIDIA Jetson	                                        aarch64	    Jetson-specific ONNX Runtime build (or generic ARM64 for CPU-only inference)
+
+To compile the source code, use the following command to compile:
+g++ onnx_yolo11_video_demo_threaded.cpp -o onnx_yolo11_demo_threaded     -std=c++17 -O3 -pthread     $(pkg-config --cflags --libs opencv4)     -I/opt/onnxruntime/include     -L/opt/onnxruntime/lib     -lonnxruntime
+
+Or use the provided CMakeLists.txt to generate a Makefile.
+
+To run the program use ./onnx_yolo11_video_demo_threaded video_file.mp4
+The program will process the video and generate a log file called detections.csv and a new video called object_detection_demo.mp4.
+Play the video to see the analysis amd all the objects that were detected.
