@@ -25,7 +25,7 @@ Intel/AMD PC	                                        x86_64	    onnxruntime-linu
 ARM64 Linux (Apple M VM, Raspberry Pi, RK3588, etc.)  aarch64     onnxruntime-linux-aarch64-*.tgz
 NVIDIA Jetson	                                        aarch64	    Jetson-specific ONNX Runtime build (or generic ARM64 for CPU-only inference)
 
-$$ To compile the source code, use the following command to compile:
+## To compile the source code, use the following command to compile:
 g++ onnx_yolo11_video_demo_threaded.cpp -o onnx_yolo11_demo_threaded     -std=c++17 -O3 -pthread     $(pkg-config --cflags --libs opencv4)     -I/opt/onnxruntime/include     -L/opt/onnxruntime/lib     -lonnxruntime
 
 Or use the provided CMakeLists.txt to generate a Makefile.
