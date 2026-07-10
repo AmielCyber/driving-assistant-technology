@@ -121,7 +121,7 @@ void App::run() {
   HOGDescriptor hog;
 
   // Replace the pedestrian detector yaml file with our yaml file here
-  if (!hog.load("stop_sign_hog_detector.yml")) {
+  if (!hog.load("data/stop-sign/stop_sign_hog_detector.yml")) {
     throw runtime_error("Could not load stop_sign_hog_detector.yml");
   }
   while (running) {
