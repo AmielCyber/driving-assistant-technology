@@ -90,8 +90,8 @@ Comments were provided by Amiel for clear understanding
 LaneState LaneDeparture::analyze_lane(const std::vector<cv::Vec4i> &segments,
                                       int width, int height) {
   constexpr double vertical_line_threshold = 0.3;
-  constexpr int warning_threshold = 10; // Pixels off-center for orange warning
-  constexpr int alert_threshold = 50;   // Pixels off-center for red alert
+  constexpr int warning_threshold = 40; // Pixels off-center for orange warning
+  constexpr int alert_threshold = 100;   // Pixels off-center for red alert
   LaneState state;
   // Assume camera is in the center, may change this with an algorithm
   state.x_car_center = width / 2;

@@ -85,7 +85,7 @@ test-data/
 .venv
 
 # Any video data produced in root
-*.mp4
+./*.mp4
 
 # ignore the entire archive folder
 archive/
