@@ -74,3 +74,42 @@ Exercise5CSCI612/
   C++ headers and implementations along with Python scripts
 - test-data: Used for development only where we store
   our sample video files to test
+
+## File Structure
+
+```text
+Exercise5CSCI612/
+├── src/
+│   └── code-for-stop-sign-training-and-detection/
+│       ├── DetectStopSign.cpp
+│       ├── stop_sign_hog_detector.yml
+│       └── training/
+│           ├── TrainHOGStopSign.cpp
+│           ├── CMakeLists.txt
+│           └── stop_sign_hog_detector.yml
+```
+
+## Building and Running Spefically for the Stop Sign Detection Feature
+
+To build the project using the provided `CMakeLists.txt`, run the following commands from the root directory (`Exercise5CSCI612`):
+
+```bash
+cmake -B build
+make -C build
+```
+
+Run the stop sign detector using either of the following commands:
+
+```bash
+./build/DetectStopSign --video=<challenge_set_video_file_name>
+```
+
+or
+
+```bash
+./build/DetectStopSign -v=GOPR0639.MP4 --store=annotated_GOPR0639_07_05_2026.MP4
+```
+
+## Training
+
+> **Note:** The training dataset is **not** included in this repository. However, the HOG detector can be retrained by following the training steps described below.
