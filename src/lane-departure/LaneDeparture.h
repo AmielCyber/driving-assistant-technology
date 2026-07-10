@@ -1,7 +1,7 @@
 #ifndef LANE_DEPARTURE_H
 #define LANE_DEPARTURE_H
+#include "../ADASFeature.h"
 #include "LaneState.h"
-#include "ADASFeature.h"
 
 class LaneDeparture: public ADASFeature {
 public:

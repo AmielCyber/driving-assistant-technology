@@ -17,7 +17,7 @@ endif()
 find_package(OpenCV REQUIRED)
 
 add_executable(DriveMe src/main.cpp
-        src/lane-departure/ADASFeature.h
+        src/ADASFeature.h
         src/lane-departure/LaneDeparture.cpp
         src/lane-departure/LaneDeparture.h
         src/lane-departure/LaneState.h)
