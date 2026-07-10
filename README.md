@@ -5,8 +5,29 @@ on-the-road object detection with machine learning using YOLO(Carlos).
 
 ## Requirements
 
+### CMake
 [CMake](https://cmake.org/download/) is required
 to build the generated Makefile for your system.
+
+### ONNX Runtime
+Download the release for Linux, in our case aarch64 for the Jetson and extract the archive
+
+https://github.com/microsoft/onnxruntime/releases
+
+Create the target directory
+```bash
+sudo mkdir -p /opt/onnxruntime
+```
+Copy the contents to the target directory
+```bash
+sudo cp -r onnxruntime-linux-aarch64-* /opt/onnxruntime/
+```
+Update Path
+```bash
+echo "/opt/onnxruntime/lib" | sudo tee /etc/ld.so.conf.d/onnxruntime.conf
+sudo ldconfig
+```
+
 
 ## Build Process
 
