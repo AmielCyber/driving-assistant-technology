@@ -16,25 +16,21 @@ endif()
 
 find_package(OpenCV REQUIRED)
 
-add_executable(DriveMe src/main.cpp
+# -------------------------
+# Lane Departure
+# -------------------------
+add_executable(LaneDeparture src/main.cpp
         src/ADASFeature.h
         src/lane-departure/LaneDeparture.cpp
         src/lane-departure/LaneDeparture.h
         src/lane-departure/LaneState.h)
-target_link_libraries(DriveMe PRIVATE ${OpenCV_LIBS})
-
+target_link_libraries(LaneDeparture PRIVATE ${OpenCV_LIBS})
 
 # -------------------------
 # Detect Stop Sign
 # -------------------------
 add_executable(DetectStopSign src/DetectStopSign.cpp)
 target_link_libraries(DetectStopSign ${OpenCV_LIBS})
-
-# -------------------------
-# Train HOG Stop Sign
-# -------------------------
-add_executable(TrainHOGStopSign src/TrainHOGStopSign.cpp)
-target_link_libraries(TrainHOGStopSign ${OpenCV_LIBS})
 
 
 message(STATUS "OpenCV include dirs: ${OpenCV_INCLUDE_DIRS}")

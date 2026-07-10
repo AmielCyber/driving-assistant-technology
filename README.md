@@ -24,8 +24,12 @@ make -C build
 
 ## Run
 
-Usage: (--help)
+### Lane Departure Feature
+Help Usage: 
 
+```bash
+./build/LaneDeparture --help
+```
 ```bash
 Usage: DriveMe [params] 
 
@@ -41,15 +45,14 @@ Usage: DriveMe [params]
 ```
 
 Show all features
-
 ```bash
-./build/DriveMe --video=./test-data/22400001.AVI --show=stops,lanes,objects --store=my-video.mp4
+./build/LaneDeparture --video=./test-data/22400001.AVI --show=stops,lanes,objects --store=my-video.mp4
 ```
 
 Show one feature
 
 ```bash
-./build/DriveMe --video=./test-data/22400001.AVI --show=stops --store=my-video.mp4
+./build/LaneDeparture --video=./test-data/22400001.AVI --show=stops --store=my-video.mp4
 ```
 
 ## Project Directory Structure
@@ -67,10 +70,12 @@ Exercise5CSCI612/
 └── test-data/
 ```
 
-- build: where all build files are located including the Makefile and program executable
-- data: All generated output from the exercise
-- docs: Resources and documentation for this bash
+- build: where all build files are located including the Makefile and program executable such as 
+  - LaneDeparture
+  - DetectStopSign
+- data: All generated output from this exercise
+- docs: Resources and documentation for this exercise 
 - src: All source files produced for this exercise including
-  C++ headers and implementations along with Python scripts
-- test-data: Used for development only where we store
+  C++ headers and implementations along with Python scripts and training implementations
+- test-data: Used for development only, where we store
   our sample video files to test
