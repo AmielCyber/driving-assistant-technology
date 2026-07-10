@@ -1,8 +1,17 @@
-// yolo11_video_demo_threaded_ort.cpp
-// ONNX Runtime + OpenCV version
+// yolo11_video_demo.cpp
+// Created by Carlos G Cazares
+// Usage:
+//     ./yolo11_video_demo_threaded video.mp4
+//
+// Files expected in current directory:
+//     yolo11n.onnx
+//     classes.names      (or your own classes file)
+//
+// Compile:
+// g++ yolo11_video_demo_threaded.cpp -o yolo11_demo_threaded `pkg-config --cflags --libs opencv4`
 
 #include <opencv2/opencv.hpp>
-#include <onnxruntime_cxx_api.h>
+#include <opencv2/dnn.hpp>
 
 #include <fstream>
 #include <iostream>
@@ -13,9 +22,9 @@
 #include <condition_variable>
 #include <iomanip>
 #include <atomic>
-#include <chrono>
 
 using namespace cv;
+using namespace cv::dnn;
 using namespace std;
 
 static const float SCORE_THRESHOLD = 0.25f;
@@ -27,19 +36,24 @@ static const int INPUT_HEIGHT = 640;
 static const int OUTPUT_WIDTH = 640;
 static const int OUTPUT_HEIGHT = 480;
 
+// Structure to get frames and count them
 struct FrameItem {
     int frameNumber;
     Mat frame;
 };
 
+// Creating a queue so threads can work on frames coordinatingly
 template <typename T>
 class SafeQueue {
 public:
-    SafeQueue(size_t maxSize = 8) : maxSize(maxSize) {}
+    SafeQueue(size_t maxSize = 8) : maxSize(maxSize) {} // Constructor
 
-    void push(T item) {
+    void push(T item) { // Function to store the frames
         unique_lock<mutex> lock(mtx);
-        notFull.wait(lock, [&] { return q.size() < maxSize || finished; });
+
+        notFull.wait(lock, [&] {
+            return q.size() < maxSize || finished;
+        });
 
         if (finished)
             return;
@@ -48,9 +62,12 @@ public:
         notEmpty.notify_one();
     }
 
-    bool pop(T& item) {
+    bool pop(T& item) { // Function to take out the frame
         unique_lock<mutex> lock(mtx);
-        notEmpty.wait(lock, [&] { return !q.empty() || finished; });
+
+        notEmpty.wait(lock, [&] {
+            return !q.empty() || finished;
+        });
 
         if (q.empty())
             return false;
@@ -62,158 +79,120 @@ public:
         return true;
     }
 
-    void setFinished() {
+    void setFinished() { // Stablish where the queue ends.
         unique_lock<mutex> lock(mtx);
         finished = true;
         notEmpty.notify_all();
         notFull.notify_all();
     }
-
-    size_t size() {
+    
+    size_t size() // Provide the current size of the queue
+    {
         lock_guard<mutex> lock(mtx);
         return q.size();
     }
 
-private:
-    queue<T> q;
-    mutex mtx;
-    condition_variable notEmpty;
-    condition_variable notFull;
-    bool finished = false;
-    size_t maxSize;
+private: // Define class attributes
+    queue<T> q; // The queue
+    mutex mtx; // to ensure only one thread use the resource.
+    condition_variable notEmpty; // if the queue is empty
+    condition_variable notFull; // if the queue is not full
+    bool finished = false; // If the queue is completed
+    size_t maxSize; // Maximum size
 };
 
-vector<string> loadClasses(const string& filename) {
-    vector<string> classes;
-    ifstream ifs(filename);
+vector<string> loadClasses(const string& filename) { // Structure to store the model classes
+    vector<string> classes; // Vector to store the classes and use it for the detection
+    ifstream ifs(filename); // File from where the classes are stored
 
     string line;
-    while (getline(ifs, line))
-        classes.push_back(line);
+    while (getline(ifs, line)) // Read class by line
+        classes.push_back(line); // enter the class in the vector
 
-    return classes;
+    return classes; // Return a vector with all the classes.
 }
 
-vector<float> preprocessImage(const Mat& frame) {
-    Mat resized;
-    resize(frame, resized, Size(INPUT_WIDTH, INPUT_HEIGHT));
-
-    Mat rgb;
-    cvtColor(resized, rgb, COLOR_BGR2RGB);
-
-    rgb.convertTo(rgb, CV_32F, 1.0 / 255.0);
-
-    vector<float> inputTensorValues(1 * 3 * INPUT_HEIGHT * INPUT_WIDTH);
-
-    int channelSize = INPUT_HEIGHT * INPUT_WIDTH;
-
-    for (int y = 0; y < INPUT_HEIGHT; y++) {
-        for (int x = 0; x < INPUT_WIDTH; x++) {
-            Vec3f pixel = rgb.at<Vec3f>(y, x);
-
-            inputTensorValues[0 * channelSize + y * INPUT_WIDTH + x] = pixel[0];
-            inputTensorValues[1 * channelSize + y * INPUT_WIDTH + x] = pixel[1];
-            inputTensorValues[2 * channelSize + y * INPUT_WIDTH + x] = pixel[2];
-        }
-    }
-
-    return inputTensorValues;
-}
-
+// Read the video as a independent thread
 void readerThread(VideoCapture& cap, SafeQueue<FrameItem>& rawQueue) {
     Mat frame;
-    int frameNumber = 0;
+    int frameNumber = 0; // Count the read frames
 
     while (cap.read(frame)) {
-        Mat smallFrame;
-        resize(frame, smallFrame, Size(640, 480));
-
+        Mat smallFrame; // To convert the frame to optimal size Yolo frame
+        resize(frame, smallFrame, Size(640, 480)); // Keep constant size frame optimal for Yolo
+        // Read frame is pushed in the threaded queue so it can be available for multi-threads
         rawQueue.push({frameNumber, smallFrame});
-        frameNumber++;
+        frameNumber++; // Increase the number of read frames
     }
 
+    // Set the queue as complete. To control the queue so it would stop a the right time.
     rawQueue.setFinished();
 }
 
+// This si the detection thread.
 void yoloThread(
-    SafeQueue<FrameItem>& rawQueue,
-    SafeQueue<FrameItem>& processedQueue,
-    Ort::Session& session,
-    const char* inputName,
-    const char* outputName,
-    const vector<string>& classNames,
-    double videoFPS,
-    int totalFrames
-) {
+    SafeQueue<FrameItem>& rawQueue, // Using the queue to pull frames when they are available
+    SafeQueue<FrameItem>& processedQueue, // The queue with the frames that have proceesed.
+    Net& net, //The model handler
+    const vector<string>& classNames, // The list of the classes for the model
+    double videoFPS, // VAriable to calculate the processing rate
+    int totalFrames // Number of total expected frames
+){  // Prepare the file to record each detected object info.
     ofstream logFile("detections.csv");
-
+    // write the detected objects using these fields. They are separated by comas
     logFile << "frame,time_sec,class,confidence,"
             << "center_x,center_y,"
             << "left,top,width,height\n";
 
-    Ort::MemoryInfo memoryInfo =
-        Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    FrameItem item; // item is the current frame
 
-    array<int64_t, 4> inputShape = {1, 3, INPUT_HEIGHT, INPUT_WIDTH};
+    int64 prevTick = cv::getTickCount(); // Get the time stamp the frame was readed.
 
-    FrameItem item;
-    int64 prevTick = cv::getTickCount();
+    while (rawQueue.pop(item)) { // Keep the loop until there are available frames
+        Mat frame = item.frame; // Frame gets the read frame
+        int frameNumber = item.frameNumber; // framenumber is the id in the record
 
-    while (rawQueue.pop(item)) {
-        Mat frame = item.frame;
-        int frameNumber = item.frameNumber;
+        int img_w = frame.cols; // Frame width
+        int img_h = frame.rows; // frame height
 
-        int img_w = frame.cols;
-        int img_h = frame.rows;
-
-        vector<float> inputTensorValues = preprocessImage(frame);
-
-        Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
-            memoryInfo,
-            inputTensorValues.data(),
-            inputTensorValues.size(),
-            inputShape.data(),
-            inputShape.size()
+        Mat blob;
+        blobFromImage( // convert the read frame in the format the Yolo model needs 1 × 3 × 640 × 640
+            frame,
+            blob,
+            1.0 / 255.0,
+            Size(INPUT_WIDTH, INPUT_HEIGHT),
+            Scalar(),
+            true, // color channels switch from B G R to R G B
+            false // image is just resize it, it is not cropped
         );
 
-        const char* inputNames[] = {inputName};
-        const char* outputNames[] = {outputName};
+        net.setInput(blob); // passes the converted frame to the model
 
-        auto outputTensors = session.Run(
-            Ort::RunOptions{nullptr},
-            inputNames,
-            &inputTensor,
-            1,
-            outputNames,
-            1
-        );
+        // taking the raw output of the model and converting it into a 2D matrix for processing.
+        vector<Mat> outputs;
+        net.forward(outputs, net.getUnconnectedOutLayersNames());
 
-        float* outputData = outputTensors[0].GetTensorMutableData<float>();
+        Mat output = outputs[0]; //output contains the detection tensor
 
-        auto outputShape =
-            outputTensors[0].GetTensorTypeAndShapeInfo().GetShape();
+        // read the dimensions
+        if (output.dims == 3) {
+            int rows = output.size[1];
+            int cols = output.size[2];
 
-        int64_t dim1 = outputShape[1];
-        int64_t dim2 = outputShape[2];
+            // Convert to a 2D matrix
+            output = output.reshape(1, rows);
 
-        int rows;
-        int cols;
-        bool transposedLayout;
-
-        // YOLO commonly outputs either [1, 84, 8400] or [1, 8400, 84]
-        if (dim1 < dim2) {
-            cols = static_cast<int>(dim1);
-            rows = static_cast<int>(dim2);
-            transposedLayout = true;
-        } else {
-            rows = static_cast<int>(dim1);
-            cols = static_cast<int>(dim2);
-            transposedLayout = false;
+            // Make sure we have the correct order.
+            if (rows < cols)
+                transpose(output, output);
         }
 
-        if (frameNumber % 100 == 0 && totalFrames > 0) {
+        if (frameNumber % 100 == 0) // since the original video is not showed, this displayed progess info
+        {
+            // Calculate the processing speed in frames per second
             double percent = 100.0 * frameNumber / totalFrames;
 
+            // Provide the update
             cout << "\rProcessing frame "
                  << frameNumber
                  << " / "
@@ -224,58 +203,57 @@ void yoloThread(
                  << "%)             "
                  << flush;
         }
-
-        if (frameNumber % 270 == 0) {
+        // Display how the queue has been moving along
+        if (frameNumber % 270 == 0)
+        {
             cout << "\rFrame "
-                 << frameNumber
-                 << "  Raw Queue: "
-                 << rawQueue.size()
-                 << "  Processed Queue: "
-                 << processedQueue.size()
-                 << flush;
+            << frameNumber
+            << "  Raw Queue: "
+            << rawQueue.size()
+            << "  Processed Queue: "
+            << processedQueue.size()
+            << flush;
         }
-
+        // Variables to prepare the boxes nad labels
         vector<int> classIds;
         vector<float> confidences;
         vector<Rect> boxes;
 
+        // Calculate object's lcoation
+        // Dimensions of the frame
         float xFactor = static_cast<float>(img_w) / INPUT_WIDTH;
         float yFactor = static_cast<float>(img_h) / INPUT_HEIGHT;
 
-        auto getValue = [&](int r, int c) -> float {
-            if (transposedLayout) {
-                return outputData[c * rows + r];
-            } else {
-                return outputData[r * cols + c];
-            }
-        };
+        // for each of the detected objects
+        for (int i = 0; i < output.rows; i++) {
+            float* data = output.ptr<float>(i);
 
-        for (int i = 0; i < rows; i++) {
-            float cx = getValue(i, 0);
-            float cy = getValue(i, 1);
-            float w  = getValue(i, 2);
-            float h  = getValue(i, 3);
+            // Calculate the location of the detected object
+            float cx = data[0];
+            float cy = data[1];
+            float w = data[2];
+            float h = data[3];
 
-            int bestClassId = -1;
-            float bestScore = 0.0f;
+            // Show the label with the detected object class
+            Mat scores(1, output.cols - 4, CV_32FC1, data + 4);
 
-            for (int c = 4; c < cols; c++) {
-                float score = getValue(i, c);
+            Point classIdPoint;
+            double score;
 
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestClassId = c - 4;
-                }
-            }
+            // Make sure the labels are displayed in the frame
+            minMaxLoc(scores, nullptr, &score, nullptr, &classIdPoint);
 
-            if (bestScore < SCORE_THRESHOLD)
+            // If the score is less than the threshold, the object is skipped
+            if (score < SCORE_THRESHOLD)
                 continue;
 
+            // Prepare the box of the detected object
             float left = (cx - 0.5f * w) * xFactor;
             float top = (cy - 0.5f * h) * yFactor;
             float width = w * xFactor;
             float height = h * yFactor;
 
+            // Draw the box
             boxes.emplace_back(
                 Rect(
                     static_cast<int>(left),
@@ -285,13 +263,15 @@ void yoloThread(
                 )
             );
 
-            classIds.push_back(bestClassId);
-            confidences.push_back(bestScore);
+            // store the class and the detection confidence
+            classIds.push_back(classIdPoint.x);
+            confidences.push_back(static_cast<float>(score));
         }
 
+        // To make sure boxes are not overlapping
         vector<int> indices;
 
-        cv::dnn::NMSBoxes(
+        NMSBoxes(// Do not overlap boxes, try to keep only the highest confident box
             boxes,
             confidences,
             CONFIDENCE_THRESHOLD,
@@ -299,7 +279,8 @@ void yoloThread(
             indices
         );
 
-        for (int idx : indices) {
+        // For detected objects in the frame
+        for (int idx : indices) { // prepare the boxes
             Rect box = boxes[idx];
 
             double timeSec = frameNumber / videoFPS;
@@ -307,7 +288,7 @@ void yoloThread(
             float centerX = box.x + box.width * 0.5f;
             float centerY = box.y + box.height * 0.5f;
 
-            string className;
+            string className; // display the class name instead of the class id
 
             if (classIds[idx] >= 0 &&
                 static_cast<size_t>(classIds[idx]) < classNames.size()) {
@@ -316,6 +297,7 @@ void yoloThread(
                 className = to_string(classIds[idx]);
             }
 
+            // Pass the info for the log
             logFile << frameNumber << ","
                     << fixed << setprecision(3) << timeSec << ","
                     << className << ","
@@ -327,12 +309,14 @@ void yoloThread(
                     << box.width << ","
                     << box.height << "\n";
 
+            // draw the box in the frame
             rectangle(frame, box, Scalar(0, 255, 0), 2);
-
+            // Tag the box with the class and confidence rate
             string label = className + cv::format(" %.2f", confidences[idx]);
 
             int baseline = 0;
 
+            // Set the font type size and other attributes
             Size tsize = getTextSize(
                 label,
                 FONT_HERSHEY_SIMPLEX,
@@ -343,6 +327,7 @@ void yoloThread(
 
             int y = max(box.y, tsize.height);
 
+            // label background
             rectangle(
                 frame,
                 Point(box.x, y - tsize.height - 4),
@@ -350,7 +335,7 @@ void yoloThread(
                 Scalar(0, 255, 0),
                 FILLED
             );
-
+            // label text infront of the background
             putText(
                 frame,
                 label,
@@ -362,16 +347,20 @@ void yoloThread(
             );
         }
 
+        // Get the time stamp at the end of the process
         int64 currentTick = cv::getTickCount();
+        // Calculate the elapsed time
         double elapsed = (currentTick - prevTick) / cv::getTickFrequency();
         prevTick = currentTick;
 
-        double fps = elapsed > 0.0 ? 1.0 / elapsed : 0.0;
-
+        // Calculate the processing speed in frames per second
+        double fps = 1.0 / elapsed;
+        // Display the processing speed
         string fpsText = cv::format("FPS: %.2f", fps);
 
         int baseline = 0;
 
+        // Prepare the box where the processing speed would be printed
         Size fpsSize = getTextSize(
             fpsText,
             FONT_HERSHEY_SIMPLEX,
@@ -379,7 +368,7 @@ void yoloThread(
             2,
             &baseline
         );
-
+        // Print the processing speed
         Point fpsOrigin(frame.cols - fpsSize.width - 10, 30);
 
         rectangle(
@@ -400,142 +389,155 @@ void yoloThread(
             2
         );
 
+        // create a new frame that would be used in the output video
         Mat outFrame;
         resize(frame, outFrame, Size(OUTPUT_WIDTH, OUTPUT_HEIGHT));
 
+        // Read the next frame from the queue
         processedQueue.push({frameNumber, outFrame});
     }
-
+    // Close the log file and reset the processingqueue
     logFile.close();
     processedQueue.setFinished();
 }
 
+// Writer in a different thread to record the output video at the same time other frame is prossed
 void writerThread(
     SafeQueue<FrameItem>& processedQueue,
     VideoWriter& writer
 ) {
     FrameItem item;
 
-    while (processedQueue.pop(item)) {
-        writer.write(item.frame);
+    while (processedQueue.pop(item)) { // Get the processed frame
+        writer.write(item.frame); // write the processed frame in the output video
     }
 }
 
 int main(int argc, char** argv) {
+    // Timestamp of the begining of the program
     auto start = chrono::steady_clock::now();
-
+    // If a video was not provided, indicate what needs to be provided
     if (argc != 2) {
         cout << "Usage:\n";
         cout << argv[0] << " video_file\n";
         return -1;
     }
-
+    // Read the file classes.names with the name of the classes
     vector<string> classNames = loadClasses("classes.names");
-
-    cout << "Loading YOLO model with ONNX Runtime..." << endl;
-
-    Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "YOLO11");
-
-    Ort::SessionOptions sessionOptions;
-    sessionOptions.SetIntraOpNumThreads(4);
-    sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-
-    Ort::Session session(env, "best.onnx", sessionOptions);
-
-    Ort::AllocatorWithDefaultOptions allocator;
-
-    auto inputNameAllocated = session.GetInputNameAllocated(0, allocator);
-    auto outputNameAllocated = session.GetOutputNameAllocated(0, allocator);
-
-    const char* inputName = inputNameAllocated.get();
-    const char* outputName = outputNameAllocated.get();
-
+    // Indicate the program is starting
+    cout << "Loading YOLO model..." << endl;
+    Net net = readNet("best.onnx");
     cout << "Model loaded successfully." << endl;
-    cout << "Input name  : " << inputName << endl;
-    cout << "Output name : " << outputName << endl;
-
+    // tell YOLO what are the preference for execution
+    net.setPreferableBackend(DNN_BACKEND_OPENCV);
+    net.setPreferableTarget(DNN_TARGET_CPU);
+    // Show the video file was open
     cout << "Opening video: " << argv[1] << endl;
 
-    VideoCapture cap(argv[1]);
+    VideoCapture cap(argv[1]); // Read the video file
 
-    if (!cap.isOpened()) {
+    if (!cap.isOpened()) // if the video file cannot be open
+    {
         cerr << "Cannot open video." << endl;
-        return -1;
+        return -1; // Terminate the program
     }
 
     cout << "Video opened successfully." << endl;
+    
+    double videoFPS = cap.get(CAP_PROP_FPS); // Video file expected speed in frames
+    int totalFrames = static_cast<int>(cap.get(CAP_PROP_FRAME_COUNT)); // expected total number of frames in the video file
+    int width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH)); // video size x
+    int height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT)); // video size y
 
-    double videoFPS = cap.get(CAP_PROP_FPS);
-    int totalFrames = static_cast<int>(cap.get(CAP_PROP_FRAME_COUNT));
-    int width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
-    int height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
+    // Provide general info about the video before analysis
+    cout << "Resolution : "
+         << width << " x " << height << endl;
 
-    cout << "Resolution : " << width << " x " << height << endl;
-    cout << "FPS        : " << videoFPS << endl;
-    cout << "Frames     : " << totalFrames << endl;
+    cout << "FPS        : "
+         << videoFPS << endl;
 
+    cout << "Frames     : "
+         << totalFrames << endl;
+
+    // if video speed was not provided, default is 30
     if (videoFPS <= 0.0)
         videoFPS = 30.0;
 
+    // Prepare a the output file
     VideoWriter writer(
-        "object_detection_demo.mp4",
+        "object_detection_demom.mp4",
         VideoWriter::fourcc('m', 'p', '4', 'v'),
         videoFPS,
         Size(OUTPUT_WIDTH, OUTPUT_HEIGHT),
         true
     );
 
+    // If the output file cannot be opened, inform and terminate the program
     if (!writer.isOpened()) {
         cerr << "Cannot open writer.\n";
         return -1;
     }
 
+    // start the queues
     SafeQueue<FrameItem> rawQueue(4);
     SafeQueue<FrameItem> processedQueue(4);
-
+    // Define the first thread "read"
     thread reader(readerThread, ref(cap), ref(rawQueue));
-
+    // Define the second thread "process/analysis"
     thread yolo(
         yoloThread,
         ref(rawQueue),
         ref(processedQueue),
-        ref(session),
-        inputName,
-        outputName,
+        ref(net),
         cref(classNames),
         videoFPS,
         totalFrames
     );
-
+    // Define the last thread "write"
     thread writerWorker(
         writerThread,
         ref(processedQueue),
         ref(writer)
     );
-
+    // provide model general info.
     cout << "----------------------------------------" << endl;
-    cout << "YOLO11 Video Detection - ONNX Runtime" << endl;
+    cout << "YOLO11 Video Detection" << endl;
     cout << "----------------------------------------" << endl;
     cout << "Input video : " << argv[1] << endl;
+    cout << "Resolution  : "
+         << cap.get(CAP_PROP_FRAME_WIDTH)
+         << " x "
+         << cap.get(CAP_PROP_FRAME_HEIGHT)
+         << endl;
+    cout << "FPS         : "
+         << cap.get(CAP_PROP_FPS)
+         << endl;
+    cout << "Frames      : "
+         << totalFrames
+         << endl;
     cout << "Output      : object_detection_demo.mp4" << endl;
     cout << "Log file    : detections.csv" << endl;
     cout << "----------------------------------------" << endl;
+    // provide progress updates
     cout << "Starting processing..." << endl;
 
+    cout << "[Reader] Started.\n" << endl;
     reader.join();
     cout << "\n[Reader] Finished." << endl;
-
+    
+    cout << "[YOLO] Started." << endl;
     yolo.join();
     cout << "[YOLO] Finished." << endl;
-
+    
+    cout << "[Writer] Started." << endl;
     writerWorker.join();
     cout << "[Writer] Finished." << endl;
-
+    // When the analysis is done take a time stamp
     auto end = chrono::steady_clock::now();
-
+    // Calculate teh duration of the analysis
     double seconds =
         chrono::duration<double>(end - start).count();
-
+    // Show the summary of the process
     cout << endl;
     cout << "--------------------------------------" << endl;
     cout << "Processing completed." << endl;
@@ -548,9 +550,9 @@ int main(int argc, char** argv) {
     cout << "Average FPS      : "
          << totalFrames / seconds
          << endl;
-
+    // Release resources
     writer.release();
     cap.release();
-
+    // Terminate the program
     return 0;
 }
