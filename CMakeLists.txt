@@ -27,24 +27,15 @@ target_link_libraries(DriveMe PRIVATE ${OpenCV_LIBS})
 # -------------------------
 # Detect Stop Sign
 # -------------------------
-add_executable(DetectStopSign
-    DetectStopSign.cpp
-)
-
-target_link_libraries(DetectStopSign
-    ${OpenCV_LIBS}
-)
+add_executable(DetectStopSign src/code-for-stop-sign-training-and-detection/DetectStopSign.cpp)
+target_link_libraries(DetectStopSign ${OpenCV_LIBS})
 
 # -------------------------
 # Train HOG Stop Sign
 # -------------------------
-add_executable(TrainHOGStopSign
-    TrainHOGStopSign.cpp
-)
+add_executable(TrainHOGStopSign src/code-for-stop-sign-training-and-detection/training/TrainHOGStopSign.cpp)
 
-target_link_libraries(TrainHOGStopSign
-    ${OpenCV_LIBS}
-)
+target_link_libraries(TrainHOGStopSign ${OpenCV_LIBS})
 
 
 message(STATUS "OpenCV include dirs: ${OpenCV_INCLUDE_DIRS}")
