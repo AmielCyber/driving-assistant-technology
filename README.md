@@ -76,45 +76,6 @@ Show one feature
 ./build/LaneDeparture --video=./test-data/22400001.AVI --show=stops --store=my-video.mp4
 ```
 
-## Project Directory Structure
-
-```bash
-Exercise5CSCI612/
-├── CMakeLists.txt
-├── build/
-│   │── DriveMe
-│   └── Makefile
-├── data/
-├── docs/
-├── README.md
-├── src/
-└── test-data/
-```
-
-- build: where all build files are located including the Makefile and program executable such as 
-  - LaneDeparture
-  - DetectStopSign
-- data: All generated output from this exercise
-- docs: Resources and documentation for this exercise 
-- src: All source files produced for this exercise including
-  C++ headers and implementations along with Python scripts and training implementations
-- test-data: Used for development only, where we store
-  our sample video files to test
-
-## File Structure
-
-```text
-Exercise5CSCI612/
-├── src/
-│   └── code-for-stop-sign-training-and-detection/
-│       ├── DetectStopSign.cpp
-│       ├── stop_sign_hog_detector.yml
-│       └── training/
-│           ├── TrainHOGStopSign.cpp
-│           ├── CMakeLists.txt
-│           └── stop_sign_hog_detector.yml
-```
-
 ## Building and Running Spefically for the Stop Sign Detection Feature
 
 To build the project using the provided `CMakeLists.txt`, run the following commands from the root directory (`Exercise5CSCI612`):
@@ -252,3 +213,43 @@ stop_sign_hog_detector.yml
 ## Training Environment
 
 > **Note:** Training was performed on a macOS laptop rather than a Linux machine for improved training performance. The generated `stop_sign_hog_detector.yml` can be copied to the Linux environment and used without retraining.
+
+
+## Project Directory Structure
+
+```bash
+Exercise5CSCI612/
+├── CMakeLists.txt
+├── build/
+│   │── DriveMe
+│   └── Makefile
+├── data/
+├── docs/
+├── README.md
+├── src/
+└── test-data/
+```
+
+- build: where all build files are located including the Makefile and program executable such as 
+  - LaneDeparture
+  - DetectStopSign
+- data: All generated output from this exercise
+- docs: Resources and documentation for this exercise 
+- src: All source files produced for this exercise including
+  C++ headers and implementations along with Python scripts and training implementations
+- test-data: Used for development only, where we store
+  our sample video files to test
+
+## File Structure
+
+```text
+Exercise5CSCI612/
+├── src/
+│   └── code-for-stop-sign-training-and-detection/
+│       ├── DetectStopSign.cpp
+│       ├── stop_sign_hog_detector.yml
+│       └── training/
+│           ├── TrainHOGStopSign.cpp
+│           ├── CMakeLists.txt
+│           └── stop_sign_hog_detector.yml
+```
