@@ -14,8 +14,6 @@ endif()
 find_package(OpenCV REQUIRED)
 
 # -------------------------
-=======
-# ----------------------------------
 # ONNX Runtime
 # ----------------------------------
 set(ONNXRUNTIME_DIR /opt/onnxruntime)
@@ -27,7 +25,7 @@ link_directories(
 # ----------------------------------
 # DriveMe
 # ----------------------------------
-add_executable(DriveMe
+add_executable(LaneDeparture
     src/main.cpp
     src/ADASFeature.h
     src/lane-departure/LaneDeparture.cpp
@@ -35,10 +33,9 @@ add_executable(DriveMe
     src/lane-departure/LaneState.h
 )
 
-target_link_libraries(DriveMe PRIVATE ${OpenCV_LIBS})
+target_link_libraries(LaneDeparture PRIVATE ${OpenCV_LIBS})
 
 # ----------------------------------
->>>>>>> main
 # Detect Stop Sign
 # ----------------------------------
 add_executable(DetectStopSign
@@ -46,6 +43,9 @@ add_executable(DetectStopSign
 )
 
 target_link_libraries(DetectStopSign PRIVATE ${OpenCV_LIBS})
+target_compile_options(DetectStopSign PRIVATE
+        -O2
+)
 
 # ----------------------------------
 # Train HOG Stop Sign
