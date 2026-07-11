@@ -91,3 +91,6 @@ archive/
 # Ignore training data
 src/code-for-stop-sign-training-and-detection/training/archive/
 src/code-for-stop-sign-training-and-detection/training/archive.zip
+
+# Build files temporary until submission
+build/
