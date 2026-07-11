@@ -76,6 +76,15 @@ Show one feature
 ./build/LaneDeparture --video=./test-data/22400001.AVI --show=stops --store=my-video.mp4
 ```
 
+### Object Detection Feature With YOLO
+
+Run
+```bash
+./build/onnx_yolo11_demo_threaded  ./test-data/22400003.AVI
+```
+
+
+
 ## Building and Running Spefically for the Stop Sign Detection Feature
 
 To build the project using the provided `CMakeLists.txt`, run the following commands from the root directory (`Exercise5CSCI612`):
