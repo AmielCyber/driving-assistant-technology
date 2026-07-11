@@ -1,6 +1,7 @@
 #ifndef ADAS_FEATURE_H
 #define ADAS_FEATURE_H
 #include <opencv2/core/mat.hpp>
+#include <string>
 
 /**
  * ADAS Feature that each our feature will implement in order

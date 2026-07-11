@@ -1,9 +1,16 @@
 #include "./lane-departure/LaneDeparture.h"
+#include "./code-for-stop-sign-training-and-detection/DetectStopSign.h"
 #include "ADASFeature.h"
+#include <chrono>
 #include <cstdlib>
+#include <iomanip>
 #include <iostream>
+#include <memory>
 #include <opencv2/opencv.hpp>
 #include <optional>
+#include <sstream>
+#include <string>
+#include <vector>
 
 using std::chrono::steady_clock;
 
@@ -128,7 +135,14 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
         std::cout << "Object Detection feature not implemented\n";
       } else if (feature == "stops") {
         /************* Stop Sign Detection Implementation HERE ****************/
-        std::cout << "Stop Detection feature not implemented\n";
+        const std::string detector_path =
+            "src/code-for-stop-sign-training-and-detection/training/"
+            "stop_sign_hog_detector.yml";
+
+        config.features.push_back(
+            std::make_shared<DetectStopSign>(detector_path));
+
+        std::cout << "Stop sign detection enabled\n";
       }
     }
   }
