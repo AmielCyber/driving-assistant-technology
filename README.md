@@ -1,4 +1,4 @@
-# Exercise 5 Extended Lab Proposal and Exploratory Code
+# Final Project: Assisted Driving Technology
 
 AV/ADAS with C++ OpenCV, Nvidia Jetson. With lane departure warning system(Amiel), stop detection with HOG (Julia), and
 on-the-road object detection with machine learning using YOLO(Carlos).
