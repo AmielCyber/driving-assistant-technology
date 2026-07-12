@@ -1,50 +1,72 @@
-# Final Project: Assisted Driving Technology
+# Assisted Driving Technology with Stop Sign Detection, Road Object Detection, and Lane Departure Warning System
 
-AV/ADAS with C++ OpenCV, Nvidia Jetson. With lane departure warning system(Amiel), stop detection with HOG (Julia), and
-on-the-road object detection with machine learning using YOLO(Carlos).
+AV/ADAS with C++ OpenCV, Nvidia Jetson. With lane departure warning system(Amiel), stop sign detection with HOG (Julia), and
+on-the-road object detection with YOLO(Carlos).
 
 ## Requirements
 
 ### CMake
+
 [CMake](https://cmake.org/download/) is required
 to build the generated Makefile for your system.
 
 ### ONNX Runtime
+
 #### ONNX Runtime for Jetson Build
+
 Download the release for Linux, in our case aarch64 for the Jetson and extract the archive
 
-https://github.com/microsoft/onnxruntime/releases
+<https://github.com/microsoft/onnxruntime/releases>
 
 Create the target directory
+
 ```bash
 sudo mkdir -p /opt/onnxruntime
 ```
+
 Copy the contents to the target directory
+
 ```bash
 sudo cp -r onnxruntime-linux-aarch64-* /opt/onnxruntime/
 ```
+
 Update Path
+
 ```bash
 echo "/opt/onnxruntime/lib" | sudo tee /etc/ld.so.conf.d/onnxruntime.conf
 sudo ldconfig
 ```
+
 #### ONNX Runtime for macOS Installation
-https://formulae.brew.sh/formula/onnxruntime
+
+<https://formulae.brew.sh/formula/onnxruntime>
+
 ```bash
 brew install onnxruntime
 ```
+
 #### ONNX Runtime Cross-Platform Instructions
-https://github.com/microsoft/onnxruntime-inference-examples/tree/main/c_cxx#install-onnx-runtime
 
-
-
+<https://github.com/microsoft/onnxruntime-inference-examples/tree/main/c_cxx#install-onnx-runtime>
 
 ## Build Process
+
+To perform a clean build remove the build directory
+
+```bash
+rm -rf build
+```
 
 Generate Makefile for YOUR system in the build directory
 
 ```bash
 cmake -B build
+```
+
+Generate Makefile with your custom onnxruntime path
+
+```bash
+cmake -B build -Dnnxruntime_dir=/path/to/onnxruntime
 ```
 
 Build generated Makefile in build directory
@@ -55,12 +77,12 @@ make -C build
 
 ## Run
 
-### Lane Departure Feature
-Help Usage: 
+Help Usage:
 
 ```bash
-./build/LaneDeparture --help
+./build/DriveMe --help
 ```
+
 ```bash
 Usage: DriveMe [params] 
 
@@ -76,61 +98,44 @@ Usage: DriveMe [params]
 ```
 
 Show all features
-```bash
-./build/LaneDeparture --video=./test-data/22400001.AVI --show=stops,lanes,objects --store=my-video.mp4
-```
-
-Show one feature
 
 ```bash
-./build/LaneDeparture --video=./test-data/22400001.AVI --show=stops --store=my-video.mp4
+./build/DriveMe --video=./test-data/22400001.AVI --show=stops,lanes,objects
 ```
 
-### Object Detection Feature With YOLO
-
-Run
-```bash
-./build/onnx_yolo11_demo_threaded  ./test-data/22400003.AVI
-```
-
-
-
-## Building and Running Spefically for the Stop Sign Detection Feature
-
-To build the project using the provided `CMakeLists.txt`, run the following commands from the root directory (`Exercise5CSCI612`):
+Show Lane Departure System Feature
 
 ```bash
-cmake -B build
-make -C build
+./build/LaneDeparture --video=./test-data/22400001.AVI --show=lanes 
 ```
 
-Run the stop sign detector using either of the following commands:
+Show Stop Sign Detection
 
 ```bash
-./build/DetectStopSign --video=<challenge_set_video_file_name>
+./build/LaneDeparture --video=./test-data/22400001.AVI --show=stops 
 ```
 
-or
+Show Road Objects
 
 ```bash
-./build/DetectStopSign -v=GOPR0639.MP4 --store=annotated_GOPR0639_07_05_2026.MP4
+./build/LaneDeparture --video=./test-data/22400001.AVI --show=objects 
 ```
 
-## Training
+## Training Source
 
 > **Note:** The training dataset is **not** included in this repository. However, the HOG detector can be retrained by following the training steps described below.
 
-## Training the HOG Stop Sign Detector
+### Training the HOG Stop Sign Detector
 
-### 1. Download the Dataset
+#### 1. Download the Dataset
 
 Download the Road Sign Detection dataset from Kaggle:
 
-https://www.kaggle.com/datasets/andrewmvd/road-sign-detection
+<https://www.kaggle.com/datasets/andrewmvd/road-sign-detection>
 
 ---
 
-### 2. Organize the Dataset
+#### 2. Organize the Dataset
 
 The HOG detector requires two categories of images:
 
@@ -147,7 +152,7 @@ For this project:
 
 ---
 
-### 3. Verify the Dataset
+#### 3. Verify the Dataset
 
 The following command was used to determine the number of images in each category:
 
@@ -166,7 +171,7 @@ The dataset contained the following categories:
 
 ---
 
-### 4. Split the Dataset
+#### 4. Split the Dataset
 
 The dataset was divided into training and testing sets.
 
@@ -184,7 +189,7 @@ archive/
 
 ---
 
-## Training the Detector
+### Training the Detector
 
 The initial HOG detector was trained using the following command:
 
@@ -198,7 +203,7 @@ The initial HOG detector was trained using the following command:
 
 ---
 
-## Improving the Detector
+### Improving the Detector
 
 To improve detection performance, the detector was retrained using data augmentation.
 
@@ -229,10 +234,9 @@ stop_sign_hog_detector.yml
 
 ---
 
-## Training Environment
+### Training Environment
 
 > **Note:** Training was performed on a macOS laptop rather than a Linux machine for improved training performance. The generated `stop_sign_hog_detector.yml` can be copied to the Linux environment and used without retraining.
-
 
 ## Project Directory Structure
 
@@ -249,11 +253,11 @@ Exercise5CSCI612/
 └── test-data/
 ```
 
-- build: where all build files are located including the Makefile and program executable such as 
-  - LaneDeparture
-  - DetectStopSign
+- build: where all build files are located including the Makefile and program executable such as
+  - DriveMe
+  - TODO: ADD TRAINING EXECUTABLES
 - data: All generated output from this exercise
-- docs: Resources and documentation for this exercise 
+- docs: Resources and documentation for this exercise
 - src: All source files produced for this exercise including
   C++ headers and implementations along with Python scripts and training implementations
 - test-data: Used for development only, where we store
