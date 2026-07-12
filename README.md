@@ -6,40 +6,53 @@ on-the-road object detection with YOLO(Carlos).
 ## Requirements
 
 ### CMake
+
 [CMake](https://cmake.org/download/) is required
 to build the generated Makefile for your system.
 
 ### ONNX Runtime
+
 #### ONNX Runtime for Jetson Build
+
 Download the release for Linux, in our case aarch64 for the Jetson and extract the archive
 
-https://github.com/microsoft/onnxruntime/releases
+<https://github.com/microsoft/onnxruntime/releases>
 
 Create the target directory
+
 ```bash
 sudo mkdir -p /opt/onnxruntime
 ```
+
 Copy the contents to the target directory
+
 ```bash
 sudo cp -r onnxruntime-linux-aarch64-* /opt/onnxruntime/
 ```
+
 Update Path
+
 ```bash
 echo "/opt/onnxruntime/lib" | sudo tee /etc/ld.so.conf.d/onnxruntime.conf
 sudo ldconfig
 ```
+
 #### ONNX Runtime for macOS Installation
-https://formulae.brew.sh/formula/onnxruntime
+
+<https://formulae.brew.sh/formula/onnxruntime>
+
 ```bash
 brew install onnxruntime
 ```
-#### ONNX Runtime Cross-Platform Instructions
-https://github.com/microsoft/onnxruntime-inference-examples/tree/main/c_cxx#install-onnx-runtime
 
+#### ONNX Runtime Cross-Platform Instructions
+
+<https://github.com/microsoft/onnxruntime-inference-examples/tree/main/c_cxx#install-onnx-runtime>
 
 ## Build Process
 
 To perform a clean build remove the build directory
+
 ```bash
 rm -rf build
 ```
@@ -50,6 +63,12 @@ Generate Makefile for YOUR system in the build directory
 cmake -B build
 ```
 
+Generate Makefile with your custom onnxruntime path
+
+```bash
+cmake -B build -Dnnxruntime_dir=/path/to/onnxruntime
+```
+
 Build generated Makefile in build directory
 
 ```bash
@@ -58,11 +77,12 @@ make -C build
 
 ## Run
 
-Help Usage: 
+Help Usage:
 
 ```bash
 ./build/DriveMe --help
 ```
+
 ```bash
 Usage: DriveMe [params] 
 
@@ -78,6 +98,7 @@ Usage: DriveMe [params]
 ```
 
 Show all features
+
 ```bash
 ./build/DriveMe --video=./test-data/22400001.AVI --show=stops,lanes,objects
 ```
@@ -87,17 +108,18 @@ Show Lane Departure System Feature
 ```bash
 ./build/LaneDeparture --video=./test-data/22400001.AVI --show=lanes 
 ```
+
 Show Stop Sign Detection
 
 ```bash
 ./build/LaneDeparture --video=./test-data/22400001.AVI --show=stops 
 ```
+
 Show Road Objects
 
 ```bash
 ./build/LaneDeparture --video=./test-data/22400001.AVI --show=objects 
 ```
-
 
 ## Training Source
 
@@ -109,7 +131,7 @@ Show Road Objects
 
 Download the Road Sign Detection dataset from Kaggle:
 
-https://www.kaggle.com/datasets/andrewmvd/road-sign-detection
+<https://www.kaggle.com/datasets/andrewmvd/road-sign-detection>
 
 ---
 
@@ -216,7 +238,6 @@ stop_sign_hog_detector.yml
 
 > **Note:** Training was performed on a macOS laptop rather than a Linux machine for improved training performance. The generated `stop_sign_hog_detector.yml` can be copied to the Linux environment and used without retraining.
 
-
 ## Project Directory Structure
 
 ```bash
@@ -232,11 +253,11 @@ Exercise5CSCI612/
 └── test-data/
 ```
 
-- build: where all build files are located including the Makefile and program executable such as 
+- build: where all build files are located including the Makefile and program executable such as
   - DriveMe
   - TODO: ADD TRAINING EXECUTABLES
 - data: All generated output from this exercise
-- docs: Resources and documentation for this exercise 
+- docs: Resources and documentation for this exercise
 - src: All source files produced for this exercise including
   C++ headers and implementations along with Python scripts and training implementations
 - test-data: Used for development only, where we store
