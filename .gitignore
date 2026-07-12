@@ -94,3 +94,6 @@ src/code-for-stop-sign-training-and-detection/training/archive.zip
 
 # Build files temporary until submission
 build/
+
+# Compile flags for LSPs
+compile_flags.txt
