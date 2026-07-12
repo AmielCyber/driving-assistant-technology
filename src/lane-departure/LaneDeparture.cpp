@@ -4,8 +4,7 @@
 cv::Mat LaneDeparture::process(cv::Mat frame) {
   const cv::Mat edges = apply_canny_edge_detection(frame);
   const cv::Mat roi_edges = apply_region_of_interest(edges);
-  const std::vector<cv::Vec4i> segments =
-      get_hough_probabilistic_lines(roi_edges);
+  const std::vector<cv::Vec4i> segments = get_hough_probabilistic_lines(roi_edges);
 
   const LaneState state = analyze_lane(segments, frame.cols, frame.rows);
   draw_overlay(state, frame);
@@ -17,59 +16,56 @@ std::string LaneDeparture::get_feature_name() { return this->name; }
 cv::Mat LaneDeparture::apply_canny_edge_detection(const cv::Mat &frame) {
   constexpr double lower_thresh = 10;
   constexpr double upper_thresh = 50;
-  cv::Mat gray, blur, edges;
+  cv::Mat gray, blur, canny_edges;
 
   cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
   cv::GaussianBlur(gray, blur, cv::Size(5, 5), 0.0);
-  cv::Canny(blur, edges, lower_thresh, upper_thresh);
-  return edges;
+  cv::Canny(blur, canny_edges, lower_thresh, upper_thresh);
+  return canny_edges;
 }
-cv::Mat LaneDeparture::apply_region_of_interest(const cv::Mat &edges) {
+cv::Mat LaneDeparture::apply_region_of_interest(const cv::Mat &frame) {
   // NAIVE WAY TO FILTER OUT ROAD
-  // JUST DRAW A TRIANGLE from corners of the image up to the center of the
-  // image
-  cv::Mat mask = cv::Mat::zeros(edges.size(), edges.type());
+  // Using a trapezoid instead of a traingle
+  const int height = frame.rows;
+  const int width = frame.cols;
+  const int dashboard_end = static_cast<int>(height * 0.85);
 
-  int width = edges.cols;
-  int height = edges.rows;
-
-  // Create a triangle vector
-  const std::vector triangle = {
-      cv::Point(0, height), // bottom-left image corner
-      cv::Point(width / 2,
-                static_cast<int>(height * 0.55)), // horizontal center of image
-      cv::Point(width, height)                    // bottom-right image corner
+  // Using percentages instead of raw pixel values
+  const std::vector<cv::Point> polygons = {
+      // Bottom-Left
+      {static_cast<int>(width * 0.05), dashboard_end},
+      // Top-Left
+      {static_cast<int>(width * 0.45), static_cast<int>(height * 0.60)},
+      // Top-Right
+      {static_cast<int>(width * 0.55), static_cast<int>(height * 0.60)},
+      // Bottom-Right
+      {static_cast<int>(width * 0.95), dashboard_end},
   };
+  cv::Mat mask = cv::Mat::zeros(frame.size(), frame.type());
+  cv::fillPoly(mask, polygons, cv::Scalar(255));
 
-  // Set every pixel as white in the triangle
-  cv::fillConvexPoly(mask, triangle, cv::Scalar(255));
+  cv::Mat masked_frame;
+  // Only show the image in the ROI by CannyEdgeFrame & Trapezoid(Intersection),
+  // thus everything outside the Trapezoid gets ignored
+  cv::bitwise_and(frame, mask, masked_frame);
 
-  cv::Mat masked_edges;
-  // Only show the image in the ROI by Edges & Triangle(Intersection),
-  // thus everything outside the triangle gets ignored
-  cv::bitwise_and(edges, mask, masked_edges);
-
-  return masked_edges;
+  return masked_frame;
 }
 
-std::vector<cv::Vec4i>
-LaneDeparture::get_hough_probabilistic_lines(const cv::Mat &frame) {
+std::vector<cv::Vec4i> LaneDeparture::get_hough_probabilistic_lines(const cv::Mat &frame) {
   constexpr double theta = CV_PI / 180;
   constexpr double threshold = 60;
   constexpr double min_line_length = 15;
   constexpr double max_line_gap = 20;
 
   std::vector<cv::Vec4i> segments;
-  cv::HoughLinesP(frame, segments, 1, theta, threshold, min_line_length,
-                  max_line_gap);
+  cv::HoughLinesP(frame, segments, 1, theta, threshold, min_line_length, max_line_gap);
   return segments;
 }
-void LaneDeparture::draw_lines(const std::vector<cv::Vec4i> &lines,
-                               cv::Mat &original_frame) {
+void LaneDeparture::draw_lines(const std::vector<cv::Vec4i> &lines, cv::Mat &original_frame) {
   const auto no_warning_lane_color = cv::Scalar(235, 149, 70);
   for (const auto &s : lines) {
-    cv::line(original_frame, cv::Point(s[0], s[1]), cv::Point(s[2], s[3]),
-             no_warning_lane_color, 2, cv::LINE_AA);
+    cv::line(original_frame, cv::Point(s[0], s[1]), cv::Point(s[2], s[3]), no_warning_lane_color, 2, cv::LINE_AA);
   }
 }
 /**
@@ -87,11 +83,10 @@ Comments were provided by Amiel for clear understanding
  * @param height
  * @return
  */
-LaneState LaneDeparture::analyze_lane(const std::vector<cv::Vec4i> &segments,
-                                      int width, int height) {
+LaneState LaneDeparture::analyze_lane(const std::vector<cv::Vec4i> &segments, int width, int height) {
   constexpr double vertical_line_threshold = 0.3;
   constexpr int warning_threshold = 40; // Pixels off-center for orange warning
-  constexpr int alert_threshold = 100;   // Pixels off-center for red alert
+  constexpr int alert_threshold = 100;  // Pixels off-center for red alert
   LaneState state;
   // Assume camera is in the center, may change this with an algorithm
   state.x_car_center = width / 2;
@@ -111,21 +106,18 @@ LaneState LaneDeparture::analyze_lane(const std::vector<cv::Vec4i> &segments,
     const double intercept = y1 - slope * x1;
     // Intensive operation, may need to rewrite for optimization
     // Using Euclidean distance equation
-    const double length =
-        std::sqrt(std::pow(y2 - y1, 2) + std::pow(x2 - x1, 2));
+    const double length = std::sqrt(std::pow(y2 - y1, 2) + std::pow(x2 - x1, 2));
 
     // Filter out non-vertical lines
     if (std::abs(slope) < vertical_line_threshold)
       continue;
 
-    if (slope < 0 && x1 < static_cast<double>(width) / 2 &&
-        x2 < static_cast<double>(width) / 2) {
+    if (slope < 0 && x1 < static_cast<double>(width) / 2 && x2 < static_cast<double>(width) / 2) {
       // Left lane detection
       left_slope_sum += slope * length;
       left_intercept_sum += intercept * length;
       left_weight += length;
-    } else if (slope > 0 && x1 > static_cast<double>(width) / 2 &&
-               x2 > static_cast<double>(width) / 2) {
+    } else if (slope > 0 && x1 > static_cast<double>(width) / 2 && x2 > static_cast<double>(width) / 2) {
       // Right lane detection
       right_slope_sum += slope * length;
       right_intercept_sum += intercept * length;
@@ -208,22 +200,18 @@ void LaneDeparture::draw_overlay(const LaneState &state, cv::Mat &frame) {
   // Draw Left Lane
   if (state.left_lane.has_value()) {
     auto l = state.left_lane.value();
-    cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]),
-             get_color(state.left_status), 5, cv::LINE_AA);
+    cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), get_color(state.left_status), 5, cv::LINE_AA);
   }
 
   // Draw Right Lane
   if (state.right_lane.has_value()) {
     auto l = state.right_lane.value();
-    cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]),
-             get_color(state.right_status), 5, cv::LINE_AA);
+    cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), get_color(state.right_status), 5, cv::LINE_AA);
   }
 
   // Draw Circle to reference where the car is at.
-  cv::circle(frame, cv::Point(state.x_lane_center, frame.rows - 50), 8,
-             car_center_color, -1);
+  cv::circle(frame, cv::Point(state.x_lane_center, frame.rows - 50), 8, car_center_color, -1);
 
   // Draw Car Center (Camera Center) for reference
-  cv::circle(frame, cv::Point(state.x_car_center, frame.rows - 50), 5,
-             cv::Scalar(255, 255, 255), -1);
+  cv::circle(frame, cv::Point(state.x_car_center, frame.rows - 50), 5, cv::Scalar(255, 255, 255), -1);
 }
