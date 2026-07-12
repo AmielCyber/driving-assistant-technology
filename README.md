@@ -13,7 +13,10 @@ to build the generated Makefile for your system.
 Download the release for Linux, in our case aarch64 for the Jetson and extract the archive
 
 https://github.com/microsoft/onnxruntime/releases
+#### ONNX Runtime Cross-Platform Instructions
+https://github.com/microsoft/onnxruntime-inference-examples/tree/main/c_cxx#install-onnx-runtime
 
+#### ONNX Runtime for Jetson Build
 Create the target directory
 ```bash
 sudo mkdir -p /opt/onnxruntime
