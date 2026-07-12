@@ -8,74 +8,83 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(MSVC)
   add_compile_options(/W4)
 else()
-  add_compile_options(-Wall -Wextra -pedantic)
+  # Warnings, Extra warnings, warnings if not using C++ standards, level 3 optimization
+  add_compile_options(-Wall -Wextra -Wpedantic -O3)
 endif()
 
 find_package(OpenCV REQUIRED)
 
 # -------------------------
 # ONNX Runtime
-# ----------------------------------
-# set(ONNXRUNTIME_DIR /opt/onnxruntime)
+# -------------------------
+set(ONNXRUNTIME_DIR "" CACHE PATH "Path to ONNX Runtime root folder")
 
-# link_directories(
-#    ${ONNXRUNTIME_DIR}/lib
-# )
+if(NOT ONNXRUNTIME_DIR)
+  if(APPLE)
+    # Installed with HomeBrew
+    set(ONNXRUNTIME_DIR "/opt/homebrew/opt/onnxruntime")
+  elseif(UNIX AND CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+    set(ONNXRUNTIME_DIR "/opt/onnxruntime")
+  endif()
+endif()
 
+message(STATUS "ONNX Runtime dir: ${ONNXRUNTIME_DIR}")
 
-# ----------------------------------
+add_library(onnxruntime SHARED IMPORTED)
+
+if(APPLE)
+  set_target_properties(onnxruntime PROPERTIES
+          IMPORTED_LOCATION "${ONNXRUNTIME_DIR}/lib/libonnxruntime.dylib"
+          INTERFACE_INCLUDE_DIRECTORIES "${ONNXRUNTIME_DIR}/include"
+  )
+else()
+  set_target_properties(onnxruntime PROPERTIES
+          IMPORTED_LOCATION "${ONNXRUNTIME_DIR}/lib/libonnxruntime.so"
+          INTERFACE_INCLUDE_DIRECTORIES "${ONNXRUNTIME_DIR}/include"
+  )
+endif()
+
+# -------------------------
 # DriveMe
-# ----------------------------------
+# -------------------------
 add_executable(DriveMe
-    src/main.cpp
-    src/ADASFeature.h
-    src/lane-departure/LaneDeparture.cpp
-    src/lane-departure/LaneDeparture.h
-    src/lane-departure/LaneState.h
-    src/code-for-stop-sign-training-and-detection/DetectStopSign.h
-    src/code-for-stop-sign-training-and-detection/DetectStopSign.cpp
+        src/main.cpp
+        src/ADASFeature.h
+        src/lane-departure/LaneDeparture.cpp
+        src/lane-departure/LaneDeparture.h
+        src/lane-departure/LaneState.h
+        src/code-for-stop-sign-training-and-detection/DetectStopSign.h
+        src/code-for-stop-sign-training-and-detection/DetectStopSign.cpp
 )
 
 target_link_libraries(DriveMe PRIVATE ${OpenCV_LIBS})
 
-# ----------------------------------
-# Training Source Goes Here
-# ----------------------------------
-
-# ----------------------------------
+# -------------------------
 # Train HOG Stop Sign
-# ----------------------------------
+# -------------------------
 add_executable(TrainHOGStopSign
-    src/TrainHOGStopSign.cpp
+        src/TrainHOGStopSign.cpp
 )
 
 target_link_libraries(TrainHOGStopSign PRIVATE ${OpenCV_LIBS})
 
-# ----------------------------------
+# -------------------------
 # ONNX YOLO11 Demo
-# ----------------------------------
-#add_executable(onnx_yolo11_demo_threaded
-#    src/onnx_yolo11_video_demo_threaded.cpp
-#)
+# -------------------------
+add_executable(onnx_yolo11_demo_threaded
+        src/onnx_yolo11_video_demo_threaded.cpp
+)
 
-#target_include_directories(onnx_yolo11_demo_threaded PRIVATE
-#    ${OpenCV_INCLUDE_DIRS}
-#    ${ONNXRUNTIME_DIR}/include
-#)
+target_link_libraries(onnx_yolo11_demo_threaded PRIVATE
+        ${OpenCV_LIBS}
+        onnxruntime
+)
 
-#target_link_libraries(onnx_yolo11_demo_threaded PRIVATE
-#    ${OpenCV_LIBS}
-#    onnxruntime
-#    pthread
-#)
+if(UNIX AND NOT APPLE)
+  target_link_libraries(onnx_yolo11_demo_threaded PRIVATE pthread)
+endif()
 
-#target_compile_options(onnx_yolo11_demo_threaded PRIVATE
-#    -O3
-#)
-# ----------------------------------
-# End of Training Sources
-# ----------------------------------
-
+target_compile_options(onnx_yolo11_demo_threaded PRIVATE -O3)
 
 message(STATUS "OpenCV include dirs: ${OpenCV_INCLUDE_DIRS}")
 message(STATUS "OpenCV libs: ${OpenCV_LIBS}")
