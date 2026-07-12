@@ -10,13 +10,11 @@ on-the-road object detection with machine learning using YOLO(Carlos).
 to build the generated Makefile for your system.
 
 ### ONNX Runtime
+#### ONNX Runtime for Jetson Build
 Download the release for Linux, in our case aarch64 for the Jetson and extract the archive
 
 https://github.com/microsoft/onnxruntime/releases
-#### ONNX Runtime Cross-Platform Instructions
-https://github.com/microsoft/onnxruntime-inference-examples/tree/main/c_cxx#install-onnx-runtime
 
-#### ONNX Runtime for Jetson Build
 Create the target directory
 ```bash
 sudo mkdir -p /opt/onnxruntime
@@ -30,6 +28,15 @@ Update Path
 echo "/opt/onnxruntime/lib" | sudo tee /etc/ld.so.conf.d/onnxruntime.conf
 sudo ldconfig
 ```
+#### ONNX Runtime for macOS Installation
+https://formulae.brew.sh/formula/onnxruntime
+```bash
+brew install onnxruntime
+```
+#### ONNX Runtime Cross-Platform Instructions
+https://github.com/microsoft/onnxruntime-inference-examples/tree/main/c_cxx#install-onnx-runtime
+
+
 
 
 ## Build Process
