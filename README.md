@@ -63,10 +63,10 @@ Generate Makefile for YOUR system in the build directory
 cmake -B build
 ```
 
-Generate Makefile with your custom onnxruntime path
+**OR** generate Makefile with your custom onnxruntime path
 
 ```bash
-cmake -B build -Dnnxruntime_dir=/path/to/onnxruntime
+cmake -B build -Donnxruntime_dir=/path/to/onnxruntime
 ```
 
 Build generated Makefile in build directory
