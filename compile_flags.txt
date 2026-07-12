@@ -1,2 +1,0 @@
--isystem
-/opt/homebrew/opt/opencv/include/opencv4
