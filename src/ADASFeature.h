@@ -16,7 +16,7 @@ public:
    * @param frame The frame to analyze the features
    * @return A frame that will display the features of the passed frame
    */
-  virtual cv::Mat process(cv::Mat frame) = 0;
+  virtual cv::Mat process(const cv::Mat &frame) = 0;
   /**
    * Returns the name for this feature. Can be used to name a window
    * @return Returns the name for this feature
