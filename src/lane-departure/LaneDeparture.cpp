@@ -1,14 +1,18 @@
 #include "LaneDeparture.h"
 #include <opencv2/imgproc.hpp>
 
-cv::Mat LaneDeparture::process(const cv::Mat &frame) {
-  calculate_road_y_range(frame);
-  const cv::Mat canny_frame = apply_canny_edge_detection(frame);
+cv::Mat LaneDeparture::process(cv::Mat &frame) {
+  cv::Mat hls, combined_mask, masked_frame;
+  cv::cvtColor(frame, hls, cv::COLOR_BGR2HLS);
+  const cv::Mat yellow_mask = apply_yellow_lane_mask(hls);
+  const cv::Mat white_mask = apply_white_lane_mask(hls);
+  cv::bitwise_or(yellow_mask, white_mask, combined_mask);
+  cv::bitwise_and(frame, frame, masked_frame, combined_mask);
+
+
+  const cv::Mat canny_frame = apply_canny_edge_detection(masked_frame);
   const cv::Mat roi_frame = apply_region_of_interest(canny_frame);
   const std::vector<cv::Vec4i> segments = get_hough_probabilistic_lines(roi_frame);
-  const auto left_right_lines = get_avg_left_and_right_line(segments);
-  const cv::Mat lines = apply_lines(frame, segments);
-
   const LaneState state = analyze_lane(segments, frame.cols, frame.rows);
   draw_overlay(state, frame);
 
@@ -51,15 +55,16 @@ cv::Mat LaneDeparture::apply_scharr_edge_detection(const cv::Mat &frame) {
 
   return scaled;
 }
-void LaneDeparture::calculate_road_y_range(const cv::Mat &frame) {
-  if (horizon_y_start_pixel <= 0 || dashboard_y_end_percentage <= 0) {
-    horizon_y_start_pixel = static_cast<int>(frame.rows * horizon_y_start_percentage);
-    dashboard_y_end_pixel = static_cast<int>(frame.rows * dashboard_y_end_percentage);
+void LaneDeparture::calculate_image_points(const cv::Mat &frame) {
+  if (horizon_y_start_pixel <= 0 || dashboard_y_ratio <= 0 || car_x_center_pixel <= 0) {
+    horizon_y_start_pixel = static_cast<int>(frame.rows * horizon_y_ratio);
+    dashboard_y_end_pixel = static_cast<int>(frame.rows * dashboard_y_ratio);
+    car_x_center_pixel = static_cast<int>(frame.cols * car_x_center_percentage);
   }
 }
 std::vector<cv::Point> LaneDeparture::get_trapezoid_roi(const int height, const int width) const {
-  const int trapezoid_bottom = static_cast<int>(height * dashboard_y_end_percentage);
-  const int trapezoid_top = static_cast<int>(height * horizon_y_start_percentage);
+  const int trapezoid_bottom = static_cast<int>(height * dashboard_y_ratio);
+  const int trapezoid_top = static_cast<int>(height * horizon_y_ratio);
   return std::vector<cv::Point>{
       // Bottom-Left Point
       {static_cast<int>(width * 0.05), trapezoid_bottom},
@@ -72,8 +77,8 @@ std::vector<cv::Point> LaneDeparture::get_trapezoid_roi(const int height, const 
   };
 }
 std::vector<cv::Point> LaneDeparture::get_perspective_roi(const int height, const int width) {
-  const int roi_bottom = static_cast<int>(height * dashboard_y_end_percentage);
-  const int roi_top = static_cast<int>(height * horizon_y_start_percentage);
+  const int roi_bottom = static_cast<int>(height * dashboard_y_ratio);
+  const int roi_top = static_cast<int>(height * horizon_y_ratio);
   return std::vector<cv::Point>{
       // Bottom-Left Point
       {static_cast<int>(width * 0.05), roi_bottom},
@@ -201,101 +206,33 @@ Comments were provided by Amiel for clear understanding
  */
 LaneState LaneDeparture::analyze_lane(const std::vector<cv::Vec4i> &segments, int width, int height) {
   constexpr double vertical_line_threshold = 0.3;
-  constexpr int warning_threshold = 40; // Pixels off-center for orange warning
-  constexpr int alert_threshold = 100;  // Pixels off-center for red alert
+
   LaneState state;
-  // Assume camera is in the center, may change this with an algorithm
   state.x_car_center = width / 2;
 
-  // Get average of left and right lanes
-  double left_slope_sum = 0, left_intercept_sum = 0, left_weight = 0;
-  double right_slope_sum = 0, right_intercept_sum = 0, right_weight = 0;
+  // Convert percentage ratios to actual Y-pixel coordinates
+  const int y_top = static_cast<int>(height * horizon_y_ratio);
+  const int y_bottom = static_cast<int>(height * dashboard_y_ratio);
 
-  for (const auto &s : segments) {
-    const double x1 = s[0], y1 = s[1], x2 = s[2], y2 = s[3];
+  // 1. Separate raw segments into left and right candidates
+  auto [left_segments, right_segments] = separate_lanes(segments, state.x_car_center, vertical_line_threshold);
 
-    // Avoid division by zero
-    if (x1 == x2)
-      continue;
+  // 2. Filter out outer lanes/bike lanes by clustering around closest x-intercept
+  state.left_lane = calculate_closest_lane(left_segments, y_bottom, y_top, state.x_car_center, width);
+  state.right_lane = calculate_closest_lane(right_segments, y_bottom, y_top, state.x_car_center, width);
 
-    const double slope = (y2 - y1) / (x2 - x1);
-    const double intercept = y1 - slope * x1;
-    // Intensive operation, may need to rewrite for optimization
-    // Using Euclidean distance equation
-    const double length = std::sqrt(std::pow(y2 - y1, 2) + std::pow(x2 - x1, 2));
-
-    // Filter out non-vertical lines
-    if (std::abs(slope) < vertical_line_threshold)
-      continue;
-
-    if (slope < 0 && x1 < static_cast<double>(width) / 2 && x2 < static_cast<double>(width) / 2) {
-      // Left lane detection
-      left_slope_sum += slope * length;
-      left_intercept_sum += intercept * length;
-      left_weight += length;
-    } else if (slope > 0 && x1 > static_cast<double>(width) / 2 && x2 > static_cast<double>(width) / 2) {
-      // Right lane detection
-      right_slope_sum += slope * length;
-      right_intercept_sum += intercept * length;
-      right_weight += length;
-    }
-  }
-
-  // Calculate vertical line boundaries from bottom and top of ROI
-  const int y_bottom = height;
-  const int y_top = static_cast<int>(height * 0.6);
-
-  int left_bottom_x = 0;
-  int right_bottom_x = width;
-
-  if (left_weight > 0) {
-    // Set left lane
-    /* / */
-    const double m = left_slope_sum / left_weight;
-    const double b = left_intercept_sum / left_weight;
-    left_bottom_x = static_cast<int>((y_bottom - b) / m);
-    const int top_x = static_cast<int>((y_top - b) / m);
-    state.left_lane = cv::Vec4i(left_bottom_x, y_bottom, top_x, y_top);
-  }
-
-  if (right_weight > 0) {
-    // Set right lane
-    /* \ */
-    const double m = right_slope_sum / right_weight;
-    const double b = right_intercept_sum / right_weight;
-    right_bottom_x = static_cast<int>((y_bottom - b) / m);
-    const int top_x = static_cast<int>((y_top - b) / m);
-    state.right_lane = cv::Vec4i(right_bottom_x, y_bottom, top_x, y_top);
-  }
-
-  // Detect middle of the lane
+  // 3. Calculate lane center
   if (state.left_lane && state.right_lane) {
+    int left_bottom_x = state.left_lane.value()[0];
+    int right_bottom_x = state.right_lane.value()[0];
     state.x_lane_center = (left_bottom_x + right_bottom_x) / 2;
   } else {
-    // Fallback to the middle of the car center
     state.x_lane_center = state.x_car_center;
   }
 
-  // Detect lane crossing
-  int offset = state.x_car_center - state.x_lane_center;
+  // 4. Evaluate departure status based on percentage of frame width
+  evaluate_departure_status(state, width);
 
-  // Check left lane proximity
-  if (offset > alert_threshold) {
-    // leaving lane
-    state.left_status = DepartureStatus::ALERT;
-  } else if (offset > warning_threshold) {
-    // Approaching lane
-    state.left_status = DepartureStatus::WARNING;
-  }
-
-  // Check right lane proximity
-  if (offset < -alert_threshold) {
-    // leaving lane
-    state.right_status = DepartureStatus::ALERT;
-  } else if (offset < -warning_threshold) {
-    // Approaching lane
-    state.right_status = DepartureStatus::WARNING;
-  }
   return state;
 }
 void LaneDeparture::draw_overlay(const LaneState &state, cv::Mat &frame) {
@@ -399,4 +336,176 @@ std::pair<cv::Vec4i, cv::Vec4i> LaneDeparture::get_avg_left_and_right_line(const
   cv::Vec4i right_line = get_line(right_average[0], right_average[1]);
 
   return {left_line, right_line};
+}
+LaneState LaneDeparture::get_lane_state(const std::pair<cv::Vec4i, cv::Vec4i>& left_and_right_line, int width, int height) {
+  LaneState state;
+  state.x_car_center = car_x_center_pixel;
+
+
+
+  int offset = state.x_car_center - state.x_lane_center;
+
+  // state.left_lane = left_and_right_line.first;
+  // state.right_lane = left_and_right_line.second;
+
+
+
+
+}
+std::vector<LineData> LaneDeparture::extract_line_data(const std::vector<cv::Vec4i> &segments, int width, int height) {}
+std::optional<cv::Vec4i> LaneDeparture::calculate_lane_boundary(std::vector<LineData> &lines, int width, int height,
+                                                                bool is_left) {
+  std::vector<LineData> side_lines;
+
+  // Filter for left or right side based on slope and position
+  for (const auto& l : lines) {
+    if (is_left && l.slope < 0 && l.bottom_x < width / 2) {
+      side_lines.push_back(l);
+    } else if (!is_left && l.slope > 0 && l.bottom_x > width / 2) {
+      side_lines.push_back(l);
+    }
+  }
+
+  if (side_lines.empty()) return std::nullopt;
+
+  // SORTING: This is the secret to ignoring bike lanes.
+  // We sort by bottom_x to find the line closest to the car center.
+  if (is_left) {
+    std::sort(side_lines.begin(), side_lines.end(), [](const LineData& a, const LineData& b) { return a.bottom_x > b.bottom_x; });
+  } else {
+    std::sort(side_lines.begin(), side_lines.end(), [](const LineData& a, const LineData& b) { return a.bottom_x < b.bottom_x; });
+  }
+  // Identify the innermost line's bottom X coordinate
+  const int innermost_x = side_lines.front().bottom_x;
+  constexpr int cluster_tolerance = 150; // Pixels. Only average lines within this distance of the innermost line.
+
+  double slope_sum = 0, intercept_sum = 0, weight_sum = 0;
+
+  for (const auto& l : side_lines) {
+    // Only include lines that belong to the primary lane marker cluster
+    if (std::abs(l.bottom_x - innermost_x) <= cluster_tolerance) {
+      slope_sum += l.slope * l.length;
+      intercept_sum += l.intercept * l.length;
+      weight_sum += l.length;
+    }
+  }
+
+  if (weight_sum == 0) return std::nullopt;
+
+  const double m = slope_sum / weight_sum;
+  const double b = intercept_sum / weight_sum;
+
+  const int y_bottom = height;
+  const int y_top = static_cast<int>(height * 0.6);
+  const int bottom_x = static_cast<int>((y_bottom - b) / m);
+  const int top_x = static_cast<int>((y_top - b) / m);
+
+  return cv::Vec4i(bottom_x, y_bottom, top_x, y_top);
+}
+std::pair<std::vector<cv::Vec4i>, std::vector<cv::Vec4i>> LaneDeparture::separate_lanes(
+    const std::vector<cv::Vec4i>& segments, int car_center_x, double vertical_line_threshold) {
+  std::vector<cv::Vec4i> left_segments, right_segments;
+
+  for (const auto &s : segments) {
+    const double x1 = s[0], y1 = s[1], x2 = s[2], y2 = s[3];
+    if (x1 == x2) continue;
+
+    const double slope = (y2 - y1) / (x2 - x1);
+    if (std::abs(slope) < vertical_line_threshold) continue;
+
+    if (slope < 0 && x1 < car_center_x && x2 < car_center_x) {
+      left_segments.push_back(s);
+    } else if (slope > 0 && x1 > car_center_x && x2 > car_center_x) {
+      right_segments.push_back(s);
+    }
+  }
+  return {left_segments, right_segments};
+}
+
+void LaneDeparture::evaluate_departure_status(LaneState &state, const int width) const {
+  int offset = state.x_car_center - state.x_lane_center;
+  // Calculate dynamic pixel thresholds based on frame width percentage
+  const double warning_pixels = width * warning_threshold_pct;
+  const double alert_pixels = width * alert_threshold_pct;
+
+  if (offset > alert_pixels) {
+    state.left_status = DepartureStatus::ALERT;
+  } else if (offset > warning_pixels) {
+    state.left_status = DepartureStatus::WARNING;
+  }
+
+  if (offset < -alert_pixels) {
+    state.right_status = DepartureStatus::ALERT;
+  } else if (offset < -warning_pixels) {
+    state.right_status = DepartureStatus::WARNING;
+  }
+}
+std::optional<cv::Vec4i> LaneDeparture::calculate_closest_lane(
+    const std::vector<cv::Vec4i>& segments, int y_bottom, int y_top, int car_center_x, int width) {
+  if (segments.empty()) return std::nullopt;
+
+  struct SegmentData {
+    double slope;
+    double intercept;
+    double length;
+    double bottom_x;
+  };
+
+  std::vector<SegmentData> processed_segments;
+  double closest_distance = std::numeric_limits<double>::max();
+  double target_bottom_x = 0;
+
+  for (const auto& s : segments) {
+    double slope = static_cast<double>(s[3] - s[1]) / (s[2] - s[0]);
+    double intercept = s[1] - slope * s[0];
+    double length = std::hypot(s[3] - s[1], s[2] - s[0]);
+    double bottom_x = (y_bottom - intercept) / slope;
+
+    processed_segments.push_back({slope, intercept, length, bottom_x});
+
+    double distance_to_center = std::abs(car_center_x - bottom_x);
+    if (distance_to_center < closest_distance) {
+      closest_distance = distance_to_center;
+      target_bottom_x = bottom_x;
+    }
+  }
+  // Convert cluster threshold percentage to actual pixel margin for this resolution
+  const double cluster_pixel_threshold = width * cluster_threshold_pct;
+  double slope_sum = 0, intercept_sum = 0, weight = 0;
+
+  for (const auto& ps : processed_segments) {
+    if (std::abs(ps.bottom_x - target_bottom_x) <= cluster_pixel_threshold) {
+      slope_sum += ps.slope * ps.length;
+      intercept_sum += ps.intercept * ps.length;
+      weight += ps.length;
+    }
+  }
+
+  if (weight == 0) return std::nullopt;
+
+  const double m = slope_sum / weight;
+  const double b = intercept_sum / weight;
+
+  const int bottom_x = static_cast<int>((y_bottom - b) / m);
+  const int top_x = static_cast<int>((y_top - b) / m);
+
+  return cv::Vec4i(bottom_x, y_bottom, top_x, y_top);
+}
+cv::Mat LaneDeparture::apply_yellow_lane_mask(const cv::Mat &hls_frame) {
+  cv::Mat yellow_mask, orange_mask;
+
+  const auto lower_yellow_thresh = cv::Scalar(0, 35, 40);
+  const auto upper_yellow_thresh = cv::Scalar(35, 255, 255);
+  cv::inRange(hls_frame, lower_yellow_thresh, upper_yellow_thresh, yellow_mask);
+
+  return yellow_mask;
+}
+cv::Mat LaneDeparture::apply_white_lane_mask(const cv::Mat &hls_frame) {
+  cv::Mat white_mask;
+
+  const auto lower_white_thresh = cv::Scalar(0, 100, 0);
+  const auto upper_white_thresh = cv::Scalar(180, 255, 255);
+  cv::inRange(hls_frame, lower_white_thresh, upper_white_thresh, white_mask);
+
+  return white_mask;
 }

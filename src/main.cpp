@@ -1,8 +1,9 @@
-#include "./lane-departure/LaneDeparture.h"
 #include "./code-for-stop-sign-training-and-detection/DetectStopSign.h"
+#include "./lane-departure/LaneDeparture.h"
 #include "ADASFeature.h"
 #include <chrono>
 #include <cstdlib>
+#include <future>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -63,7 +64,8 @@ int main(int argc, char **argv) {
     for (auto &feature : config->features) {
       // Clock start time
       start_time = steady_clock::now();
-      cv::Mat feature_frame = feature->process(frame);
+      cv::Mat annotated_frame = frame.clone();
+      cv::Mat feature_frame = feature->process(annotated_frame);
       // Clock end time
       end_time = steady_clock::now();
       put_fps_text(feature_frame, start_time, end_time);
@@ -163,3 +165,4 @@ void put_fps_text(cv::Mat &src, const steady_clock::time_point &start_time,
   cv::putText(src, ss.str(), cv::Point(20, 40), cv::FONT_HERSHEY_SIMPLEX, 0.8,
               cv::Scalar(0, 255, 255), 2);
 }
+
