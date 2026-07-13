@@ -1,10 +1,12 @@
 #include "LaneDeparture.h"
 #include <opencv2/imgproc.hpp>
 
-cv::Mat LaneDeparture::process(cv::Mat frame) {
+cv::Mat LaneDeparture::process(const cv::Mat &frame) {
+  calculate_road_y_range(frame);
   const cv::Mat canny_frame = apply_canny_edge_detection(frame);
   const cv::Mat roi_frame = apply_region_of_interest(canny_frame);
   const std::vector<cv::Vec4i> segments = get_hough_probabilistic_lines(roi_frame);
+  const auto left_right_lines = get_avg_left_and_right_line(segments);
   const cv::Mat lines = apply_lines(frame, segments);
 
   const LaneState state = analyze_lane(segments, frame.cols, frame.rows);
@@ -49,9 +51,15 @@ cv::Mat LaneDeparture::apply_scharr_edge_detection(const cv::Mat &frame) {
 
   return scaled;
 }
-std::vector<cv::Point> LaneDeparture::get_trapezoid_roi(const int height, const int width) {
-  const int trapezoid_bottom = static_cast<int>(height * 0.85);
-  const int trapezoid_top = static_cast<int>(height * 0.55);
+void LaneDeparture::calculate_road_y_range(const cv::Mat &frame) {
+  if (horizon_y_start_pixel <= 0 || dashboard_y_end_percentage <= 0) {
+    horizon_y_start_pixel = static_cast<int>(frame.rows * horizon_y_start_percentage);
+    dashboard_y_end_pixel = static_cast<int>(frame.rows * dashboard_y_end_percentage);
+  }
+}
+std::vector<cv::Point> LaneDeparture::get_trapezoid_roi(const int height, const int width) const {
+  const int trapezoid_bottom = static_cast<int>(height * dashboard_y_end_percentage);
+  const int trapezoid_top = static_cast<int>(height * horizon_y_start_percentage);
   return std::vector<cv::Point>{
       // Bottom-Left Point
       {static_cast<int>(width * 0.05), trapezoid_bottom},
@@ -64,8 +72,8 @@ std::vector<cv::Point> LaneDeparture::get_trapezoid_roi(const int height, const 
   };
 }
 std::vector<cv::Point> LaneDeparture::get_perspective_roi(const int height, const int width) {
-  const int roi_bottom = static_cast<int>(height * 0.85);
-  const int roi_top = static_cast<int>(height * 0.55);
+  const int roi_bottom = static_cast<int>(height * dashboard_y_end_percentage);
+  const int roi_top = static_cast<int>(height * horizon_y_start_percentage);
   return std::vector<cv::Point>{
       // Bottom-Left Point
       {static_cast<int>(width * 0.05), roi_bottom},
@@ -323,10 +331,72 @@ void LaneDeparture::draw_overlay(const LaneState &state, cv::Mat &frame) {
   // Draw Car Center (Camera Center) for reference
   cv::circle(frame, cv::Point(state.x_car_center, frame.rows - 50), 5, cv::Scalar(255, 255, 255), -1);
 }
-cv::Vec4i LaneDeparture::get_line(const int y_bottom, const int y_top, double slope, double intercept) {
+
+cv::Vec4i LaneDeparture::get_line(const double slope, const double intercept) const {
   // y = mx + b -> x = (y-b)/m , b-intercept, m-slope
+  const int y_bottom = dashboard_y_end_pixel;
+  const int y_top = horizon_y_start_pixel;
+
   const int x_bottom = static_cast<int>((y_bottom - intercept) * slope);
   const int x_top = static_cast<int>((y_top - intercept) * slope);
 
   return {x_bottom, y_bottom, x_top, y_top};
+}
+
+cv::Vec2d LaneDeparture::get_avg_fitting_line(const std::vector<cv::Vec2d> &fits) {
+  cv::Vec2d avg(0.0, 0.0);
+  for (const auto &fit : fits)
+    avg += fit;
+
+  if (!fits.empty())
+    avg *= 1.0 / static_cast<double>(fits.size());
+  return avg;
+}
+
+std::pair<cv::Vec4i, cv::Vec4i> LaneDeparture::get_avg_left_and_right_line(const std::vector<cv::Vec4i> &hough_lines) {
+  constexpr double vertical_line_threshold = 0.3;
+  // Find the line of best fit for all hough lines
+  // slope and intercept vectors
+  std::vector<cv::Vec2d> left_line_fit;
+  std::vector<cv::Vec2d> right_line_fit;
+
+  // Compute line fitting
+  for (const auto &line : hough_lines) {
+    const double x1 = line[0];
+    const double y1 = line[1];
+    const double x2 = line[2];
+    const double y2 = line[3];
+
+    // Ignore vertical lines to avoid zero division
+    if (std::abs(x2 - x1) < 1e-6)
+      continue;
+
+    const double slope = (y2 - y1) / (x2 - x1);
+
+    // Filter out non-vertical lines
+    if (std::abs(slope) < vertical_line_threshold)
+      continue;
+
+    const double intercept = y1 - slope * x1;
+
+    // OpenCV Graph is flipped at the x-axis compared to Cartesian graph:
+    // (0,0) --------------------> x
+    //   |        /     \
+    //   |      /        \
+    //   y
+    if (slope < 0)
+      /*            / flipped               */
+      left_line_fit.emplace_back(slope, intercept);
+    else
+      /*            \ flipped               */
+      right_line_fit.emplace_back(slope, intercept);
+  }
+
+  cv::Vec2d left_average = get_avg_fitting_line(left_line_fit);
+  cv::Vec2d right_average = get_avg_fitting_line(right_line_fit);
+
+  cv::Vec4i left_line = get_line(left_average[0], left_average[1]);
+  cv::Vec4i right_line = get_line(right_average[0], right_average[1]);
+
+  return {left_line, right_line};
 }
