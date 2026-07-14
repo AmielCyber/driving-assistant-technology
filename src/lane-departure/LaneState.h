@@ -1,6 +1,7 @@
 #ifndef LANE_LINE_H
 #define LANE_LINE_H
 #include <optional>
+#include <opencv2/core/matx.hpp>
 
 enum class DepartureStatus {
   SAFE,
