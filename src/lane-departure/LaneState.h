@@ -9,7 +9,8 @@ enum class DepartureStatus {
   ALERT,
 };
 
-struct LaneState {
+class LaneState {
+  public:
   // {x_bottom, y_bottom, x_top, y_top}
   std::optional<cv::Vec4i> left_lane;
   std::optional<cv::Vec4i> right_lane;

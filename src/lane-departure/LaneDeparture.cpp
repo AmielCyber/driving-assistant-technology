@@ -126,7 +126,7 @@ LaneState LaneDeparture::analyze_lane(const std::vector<cv::Vec4i> &lines, const
   }
 
   // 4. Evaluate departure status based on percentage of frame width
-  evaluate_departure_status(state, width);
+  evaluate_departure_status(state);
 
   return state;
 }
@@ -251,28 +251,33 @@ void LaneDeparture::draw_overlay(const LaneState &state, cv::Mat &frame) {
   const int warning_left_line = state.x_car_center - state.x_car_center * warning_threshold_from_center_ratio;
   const int warning_right_line = state.x_car_center + state.x_car_center * warning_threshold_from_center_ratio;
 
+  /** Debug
   cv::line(frame, cv::Point(left_wheel_x, 0), cv::Point(left_wheel_x, frame.rows-1), cv::Scalar(0, 0, 255), 2, cv::LINE_AA );
   cv::line(frame, cv::Point(right_wheel_x, 0), cv::Point(right_wheel_x, frame.rows-1), cv::Scalar(0, 0, 255), 2, cv::LINE_AA );
 
   cv::line(frame, cv::Point(warning_left_line, 0), cv::Point(warning_left_line, frame.rows-1), cv::Scalar(0, 128, 255), 2, cv::LINE_AA );
   cv::line(frame, cv::Point(warning_right_line, 0), cv::Point(warning_right_line, frame.rows-1), cv::Scalar(0, 128, 255), 2, cv::LINE_AA );
+  /**
 }
 
-void LaneDeparture::evaluate_departure_status(LaneState &state, const int width) const {
-  const int offset = state.x_car_center - state.x_lane_center;
+void LaneDeparture::evaluate_departure_status(LaneState &state) const {
   // Calculate dynamic pixel thresholds based on frame width percentage
-  const double warning_pixels = width * warning_threshold_from_center_ratio;
-  const double alert_pixels = width * alert_threshold_from_center_ratio;
+  const double warning_pixels_offset = state.x_car_center * warning_threshold_from_center_ratio;
+  const double alert_pixels_offset = state.x_car_center * alert_threshold_from_center_ratio;
 
-  if (offset > alert_pixels) {
-    state.left_status = DepartureStatus::ALERT;
-  } else if (offset > warning_pixels) {
-    state.left_status = DepartureStatus::WARNING;
+  if (state.left_lane.has_value()) {
+    if (state.left_lane.value()[0] >= state.x_car_center - alert_pixels_offset) {
+      state.left_status = DepartureStatus::ALERT;
+    }else if (state.left_lane.value()[0] >= state.x_car_center - warning_pixels_offset) {
+      state.left_status = DepartureStatus::WARNING;
+    }
   }
 
-  if (offset < -alert_pixels) {
-    state.right_status = DepartureStatus::ALERT;
-  } else if (offset < -warning_pixels) {
-    state.right_status = DepartureStatus::WARNING;
+  if (state.right_lane.has_value()) {
+    if (state.right_lane.value()[0] <= state.x_car_center + alert_pixels_offset) {
+      state.right_status = DepartureStatus::ALERT;
+    }else if (state.right_lane.value()[0] <= state.x_car_center + warning_pixels_offset) {
+      state.right_status = DepartureStatus::WARNING;
+    }
   }
 }
