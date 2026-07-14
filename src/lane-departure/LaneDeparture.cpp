@@ -6,17 +6,16 @@
 cv::Mat LaneDeparture::process(cv::Mat &frame) {
   cv::Mat hls, combined_mask, masked_frame;
   // Extract yellow colors and white  for lane detection and noise reduction
-  cv::cvtColor(frame, hls, cv::COLOR_BGR2HLS);  // HLS Conversion
+  cv::cvtColor(frame, hls, cv::COLOR_BGR2HLS);                    // HLS Conversion
   const cv::Mat yellow_mask = apply_yellow_orange_lane_mask(hls); // Extract Yellow-Orange
-  const cv::Mat white_mask = apply_white_lane_mask(hls);  // Extract Dark White
-  cv::imshow("WHITE", white_mask);
-  cv::bitwise_or(yellow_mask, white_mask, combined_mask); // Combine yellow-orange & white imagee
-  cv::bitwise_and(frame, frame, masked_frame, combined_mask); // Combine yellow_white w/ original
+  const cv::Mat white_mask = apply_white_lane_mask(hls);          // Extract Dark White
+  cv::bitwise_or(yellow_mask, white_mask, combined_mask);         // Combine yellow-orange & white imagee
+  cv::bitwise_and(frame, frame, masked_frame, combined_mask);     // Combine yellow_white w/ original
 
   const cv::Mat canny_frame = apply_canny_edge_detection(masked_frame); // Perform Canny Edge
   const cv::Mat roi_frame = apply_region_of_interest(canny_frame);      // Perform Region of Interest (ROI)
   const std::vector<cv::Vec4i> hough_lines = get_probabilistic_hough_lines(roi_frame); // Perform HoughP
-  const LaneState state = analyze_lane(hough_lines, frame.cols, frame.rows); // Get Lane State
+  const LaneState state = analyze_lane(hough_lines, frame.cols, frame.rows);           // Get Lane State
   draw_overlay(state, frame); // Draw Annotations based on the lane state
 
   return frame;
@@ -26,7 +25,6 @@ std::string LaneDeparture::get_feature_name() { return this->name; }
 
 cv::Mat LaneDeparture::apply_yellow_orange_lane_mask(const cv::Mat &hls_frame) {
   cv::Mat yellow_mask, orange_mask;
-
   const auto lower_yellow_thresh = cv::Scalar(0, 35, 40);
   const auto upper_yellow_thresh = cv::Scalar(35, 255, 255);
   cv::inRange(hls_frame, lower_yellow_thresh, upper_yellow_thresh, yellow_mask);
@@ -48,7 +46,7 @@ cv::Mat LaneDeparture::apply_canny_edge_detection(const cv::Mat &frame) {
   // Optimal Parameters from Assignment 4 Problem 2 for finding lanes
   constexpr double lower_thresh = 10;
   constexpr double upper_thresh = 50;
-  const auto kernel_size = cv::Size(5,5);
+  const auto kernel_size = cv::Size(5, 5);
   cv::Mat gray, blur, canny_frame;
 
   cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
@@ -246,18 +244,24 @@ void LaneDeparture::draw_overlay(const LaneState &state, cv::Mat &frame) {
   // Draw Car Center (Camera Center) for reference
   cv::circle(frame, cv::Point(state.x_car_center, frame.rows - 50), 5, cv::Scalar(255, 255, 255), -1);
 
-  const int left_wheel_x = state.x_car_center - state.x_car_center * alert_threshold_from_center_ratio ;
-  const int right_wheel_x = state.x_car_center + state.x_car_center * alert_threshold_from_center_ratio ;
+  const int left_wheel_x = state.x_car_center - state.x_car_center * alert_threshold_from_center_ratio;
+  const int right_wheel_x = state.x_car_center + state.x_car_center * alert_threshold_from_center_ratio;
   const int warning_left_line = state.x_car_center - state.x_car_center * warning_threshold_from_center_ratio;
   const int warning_right_line = state.x_car_center + state.x_car_center * warning_threshold_from_center_ratio;
 
-  /** Debug
-  cv::line(frame, cv::Point(left_wheel_x, 0), cv::Point(left_wheel_x, frame.rows-1), cv::Scalar(0, 0, 255), 2, cv::LINE_AA );
-  cv::line(frame, cv::Point(right_wheel_x, 0), cv::Point(right_wheel_x, frame.rows-1), cv::Scalar(0, 0, 255), 2, cv::LINE_AA );
+  cv::line(frame, cv::Point(left_wheel_x, frame.rows - 50), cv::Point(left_wheel_x, frame.rows - 25),
+           departure_lane_color, 2, cv::LINE_AA);
+  cv::line(frame, cv::Point(right_wheel_x, frame.rows - 50), cv::Point(right_wheel_x, frame.rows - 25),
+           departure_lane_color, 2, cv::LINE_AA);
 
-  cv::line(frame, cv::Point(warning_left_line, 0), cv::Point(warning_left_line, frame.rows-1), cv::Scalar(0, 128, 255), 2, cv::LINE_AA );
-  cv::line(frame, cv::Point(warning_right_line, 0), cv::Point(warning_right_line, frame.rows-1), cv::Scalar(0, 128, 255), 2, cv::LINE_AA );
-  /**
+  cv::line(frame, cv::Point(warning_left_line, frame.rows - 50), cv::Point(warning_left_line, frame.rows - 25),
+           warning_lane_color, 2, cv::LINE_AA);
+  cv::line(frame, cv::Point(warning_right_line, frame.rows - 50), cv::Point(warning_right_line, frame.rows - 25),
+           warning_lane_color, 2, cv::LINE_AA);
+
+  if (state.right_status == DepartureStatus::ALERT || state.left_status == DepartureStatus::ALERT) {
+    draw_alert_triangle(frame);
+  }
 }
 
 void LaneDeparture::evaluate_departure_status(LaneState &state) const {
@@ -268,7 +272,7 @@ void LaneDeparture::evaluate_departure_status(LaneState &state) const {
   if (state.left_lane.has_value()) {
     if (state.left_lane.value()[0] >= state.x_car_center - alert_pixels_offset) {
       state.left_status = DepartureStatus::ALERT;
-    }else if (state.left_lane.value()[0] >= state.x_car_center - warning_pixels_offset) {
+    } else if (state.left_lane.value()[0] >= state.x_car_center - warning_pixels_offset) {
       state.left_status = DepartureStatus::WARNING;
     }
   }
@@ -276,8 +280,29 @@ void LaneDeparture::evaluate_departure_status(LaneState &state) const {
   if (state.right_lane.has_value()) {
     if (state.right_lane.value()[0] <= state.x_car_center + alert_pixels_offset) {
       state.right_status = DepartureStatus::ALERT;
-    }else if (state.right_lane.value()[0] <= state.x_car_center + warning_pixels_offset) {
+    } else if (state.right_lane.value()[0] <= state.x_car_center + warning_pixels_offset) {
       state.right_status = DepartureStatus::WARNING;
     }
   }
+}
+
+// GPT GENERATED CODE: in C++ opencv 4 how I can draw a small triangle with the character '!' in red in the middle of
+// frame
+void LaneDeparture::draw_alert_triangle(cv::Mat &frame) {
+  const cv::Point center(frame.cols / 2, frame.rows / 2);
+  const cv::Scalar color(0, 0, 255);
+  const int size = 50, thickness = 2;
+  const int hw = static_cast<int>(size * 0.9);
+
+  // 1. Draw Triangle
+  std::vector<cv::Point> pts = {
+      {center.x, center.y - size}, {center.x - hw, center.y + size / 2}, {center.x + hw, center.y + size / 2}};
+  cv::polylines(frame, std::vector<std::vector<cv::Point>>{pts}, true, color, thickness, cv::LINE_AA);
+
+  // 2. Draw Exclamation Mark
+  double fontScale = std::max(0.5, size / 33.0);
+  int baseline = 0;
+  cv::Size sz = cv::getTextSize("!", cv::FONT_HERSHEY_DUPLEX, fontScale, thickness, &baseline);
+  cv::putText(frame, "!", {center.x - sz.width / 2, center.y + sz.height / 2}, cv::FONT_HERSHEY_DUPLEX, fontScale,
+              color, thickness, cv::LINE_AA);
 }

@@ -39,6 +39,7 @@ private:
                                                                 int y_top, int car_center_x, int width) const;
   void evaluate_departure_status(LaneState &state) const;
   void draw_overlay(const LaneState &state, cv::Mat &frame);
+  static void draw_alert_triangle(cv::Mat& frame);
 };
 
 #endif // LANE_DEPARTURE_H
