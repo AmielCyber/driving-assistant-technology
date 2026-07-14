@@ -55,8 +55,8 @@ add_executable(DriveMe
         src/lane-departure/LaneState.h
         src/code-for-stop-sign-training-and-detection/DetectStopSign.h
         src/code-for-stop-sign-training-and-detection/DetectStopSign.cpp
-        src/Object-Detettion/YOLOVideoDetector.h
-        src/Object-Detettion/YOLOVideoDetector.cpp
+        src/Object-Detection/YOLOVideoDetector.h
+        src/Object-Detection/YOLOVideoDetector.cpp
 )
 
 target_link_libraries(DriveMe PRIVATE ${OpenCV_LIBS})
