@@ -10,6 +10,7 @@ enum class DepartureStatus {
 };
 
 struct LaneState {
+  // {x_bottom, y_bottom, x_top, y_top}
   std::optional<cv::Vec4i> left_lane;
   std::optional<cv::Vec4i> right_lane;
 
@@ -20,11 +21,15 @@ struct LaneState {
   DepartureStatus right_status{DepartureStatus::SAFE};
 };
 
+  // Used to simplify iteration of lines into slop intercept form
 struct LineData {
-  double slope;
-  double intercept;
-  double length;
-  int bottom_x;
+  double slope{0.0};
+  double intercept{0.0};
+  double length{0};
+  int bottom_x{0};
+
+  LineData() = default;
+  LineData(const double slope, const double intercept, const double length, const int bottom_x): slope{slope}, intercept{intercept}, length{length}, bottom_x {bottom_x} {};
 };
 
 #endif // LANE_LINE_H
