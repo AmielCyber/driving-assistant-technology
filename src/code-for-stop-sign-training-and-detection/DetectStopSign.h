@@ -26,7 +26,7 @@ public:
    * @param frame Frame to analyze and annotate.
    * @return Frame containing stop-sign annotations.
    */
-  cv::Mat process(cv::Mat frame) override;
+  cv::Mat process(cv::Mat& frame) override;
 
   /**
    * Return the display name of this feature.

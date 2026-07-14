@@ -16,7 +16,7 @@ DetectStopSign::DetectStopSign(
   hog.nlevels = number_of_levels;
 }
 
-cv::Mat DetectStopSign::process(cv::Mat frame) {
+cv::Mat DetectStopSign::process(cv::Mat& frame) {
   if (frame.empty()) {
     return frame;
   }

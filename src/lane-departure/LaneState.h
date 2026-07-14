@@ -1,7 +1,7 @@
 #ifndef LANE_LINE_H
 #define LANE_LINE_H
-#include <opencv2/core/types.hpp>
 #include <optional>
+#include <opencv2/core/matx.hpp>
 
 enum class DepartureStatus {
   SAFE,
@@ -18,6 +18,13 @@ struct LaneState {
 
   DepartureStatus left_status{DepartureStatus::SAFE};
   DepartureStatus right_status{DepartureStatus::SAFE};
+};
+
+struct LineData {
+  double slope;
+  double intercept;
+  double length;
+  int bottom_x;
 };
 
 #endif // LANE_LINE_H
