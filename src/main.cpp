@@ -1,5 +1,6 @@
 #include "./lane-departure/LaneDeparture.h"
 #include "./code-for-stop-sign-training-and-detection/DetectStopSign.h"
+#include "./Object-Detection/YOLOVideoDetector.h"
 #include "ADASFeature.h"
 #include <chrono>
 #include <cstdlib>
@@ -132,7 +133,14 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
         config.features.push_back(std::make_shared<LaneDeparture>());
       } else if (feature == "objects") {
         /************* Object Detection Implementation HERE ******************/
-        std::cout << "Object Detection feature not implemented\n";
+        const std::string model_path =
+              "data/Object-Detection/best.onnx";
+          const std::string classes_path =
+              "data/Object-Detection/classes.names";
+          config.features.push_back(
+              std::make_shared<YOLOVideoDetector>(model_path, classes_path));
+          std::cout << "Object detection enabled\n";
+        //std::cout << "Object Detection feature not implemented\n";
       } else if (feature == "stops") {
         /************* Stop Sign Detection Implementation HERE ****************/
         const std::string detector_path =
