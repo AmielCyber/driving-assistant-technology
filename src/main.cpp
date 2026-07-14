@@ -142,7 +142,6 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
           config.features.push_back(
               std::make_shared<YOLOVideoDetector>(model_path, classes_path));
           std::cout << "Object detection enabled\n";
-        //std::cout << "Object Detection feature not implemented\n";
       } else if (feature == "stops") {
         /************* Stop Sign Detection Implementation HERE ****************/
         const std::string detector_path =

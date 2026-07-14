@@ -8,7 +8,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include "ADASFeature.h"
+#include "../ADASFeature.h"
 
 class YOLOVideoDetector : public ADASFeature
 {
@@ -16,7 +16,7 @@ public:
     YOLOVideoDetector(const std::string& modelPath,
                       const std::string& classFilePath);
 
-    cv::Mat process(cv::Mat frame) override;
+    cv::Mat process(cv::Mat& frame) override;
     std::string get_feature_name() override;
     
 private:

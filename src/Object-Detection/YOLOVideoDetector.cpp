@@ -44,7 +44,7 @@ void YOLOVideoDetector::loadModel(const string& modelPath)
 }
 
 // Main method to detect objects
-cv::Mat YOLOVideoDetector::process(cv::Mat frame)
+cv::Mat YOLOVideoDetector::process(cv::Mat& frame)
 {
     std::vector<int> classIds;
     std::vector<float> confidences;
