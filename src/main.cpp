@@ -1,5 +1,5 @@
-#include "./code-for-stop-sign-training-and-detection/DetectStopSign.h"
 #include "./Object-Detection/YOLOVideoDetector.h"
+#include "./code-for-stop-sign-training-and-detection/DetectStopSign.h"
 #include "./lane-departure/LaneDeparture.h"
 #include "ADASFeature.h"
 #include <chrono>
@@ -25,8 +25,8 @@ struct AppConfig {
 };
 
 std::optional<AppConfig> parse_arguments(int argc, char **argv);
-void put_fps_text(cv::Mat &src, const steady_clock::time_point &start_time,
-                  const steady_clock::time_point &end_time);
+void put_fps_text(cv::Mat &src, const steady_clock::time_point &start_time, const steady_clock::time_point &end_time);
+cv::Mat run_features_async(const cv::Mat &frame, const std::vector<std::shared_ptr<ADASFeature>> &adas_features);
 
 int main(int argc, char **argv) {
   // Parse User Arguments if any.
@@ -53,31 +53,21 @@ int main(int argc, char **argv) {
     fps = 30.0; // Cap at 30 fps
 
   constexpr int ESCAPE_KEY = 27;
-  cv::Mat frame, dst;
+  cv::Mat frame, dst, annotated_frame;
   std::chrono::time_point<steady_clock> start_time;
   std::chrono::time_point<steady_clock> end_time;
-  for (int input_key = 1; input_key != ESCAPE_KEY && cap.read(frame);
-       input_key = cv::waitKey(1)) {
+  for (int input_key = 1; input_key != ESCAPE_KEY && cap.read(frame); input_key = cv::waitKey(1)) {
     // Exit if no frame captured
     if (frame.empty())
       break;
-    // Display result/s
-    for (auto &feature : config->features) {
-      // Clock start time
-      start_time = steady_clock::now();
-      cv::Mat annotated_frame = frame.clone();
-      cv::Mat feature_frame = feature->process(annotated_frame);
-      // Clock end time
-      end_time = steady_clock::now();
-      put_fps_text(feature_frame, start_time, end_time);
-      cv::imshow(feature->get_feature_name(), feature_frame);
-    }
+    start_time = steady_clock::now();
+    annotated_frame = run_features_async(frame, config->features);
+    end_time = steady_clock::now();
+    put_fps_text(annotated_frame, start_time, end_time);
     // Save output to video filename if set
     if (config->store_filename.has_value()) {
       if (!writer.isOpened()) {
-        writer.open(config->store_filename.value(),
-                    cv::VideoWriter::fourcc('m', 'p', '4', 'v'), fps,
-                    frame.size());
+        writer.open(config->store_filename.value(), cv::VideoWriter::fourcc('m', 'p', '4', 'v'), fps, frame.size());
         if (!writer.isOpened()) {
           // Check again if writer failed to open
           std::cerr << "Failed to open output video stream\n";
@@ -86,8 +76,9 @@ int main(int argc, char **argv) {
       }
       /************************** Merge features HERE *************************/
       // Needs to change to write the merged features.
-      writer.write(frame);
+      writer.write(annotated_frame);
     }
+    cv::imshow("ADAS", annotated_frame);
   }
   // Manual Clean Up, not really needed with RAII
   cap.release();
@@ -96,12 +87,11 @@ int main(int argc, char **argv) {
 }
 
 std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
-  const std::string keys = {
-      "{help h | | Print this message.}"
-      "{video v | | Video file name}"
-      "{show s | | Features to show separated by commas. Example: "
-      "--show=stops,lanes,objects}"
-      "{store o | | Store the results back in a video file name.}"};
+  const std::string keys = {"{help h | | Print this message.}"
+                            "{video v | | Video file name}"
+                            "{show s | | Features to show separated by commas. Example: "
+                            "--show=stops,lanes,objects}"
+                            "{store o | | Store the results back in a video file name.}"};
 
   const cv::CommandLineParser parser{argc, argv, keys};
   if (!parser.check()) {
@@ -117,8 +107,7 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
     return config;
   }
   // --video=
-  if (const auto video_file = parser.get<std::string>("video");
-      !video_file.empty()) {
+  if (const auto video_file = parser.get<std::string>("video"); !video_file.empty()) {
     config.video_source = video_file;
     std::cout << "Using video file: " << video_file << '\n';
   } else {
@@ -126,8 +115,7 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
     return std::nullopt;
   }
   // --show=
-  if (const auto features = parser.get<std::string>("show");
-      !features.empty()) {
+  if (const auto features = parser.get<std::string>("show"); !features.empty()) {
     std::stringstream ss(features);
     std::string feature;
     while (std::getline(ss, feature, ',')) {
@@ -135,21 +123,16 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
         config.features.push_back(std::make_shared<LaneDeparture>());
       } else if (feature == "objects") {
         /************* Object Detection Implementation HERE ******************/
-        const std::string model_path =
-              "data/Object-Detection/best.onnx";
-          const std::string classes_path =
-              "data/Object-Detection/classes.names";
-          config.features.push_back(
-              std::make_shared<YOLOVideoDetector>(model_path, classes_path));
-          std::cout << "Object detection enabled\n";
+        const std::string model_path = "data/Object-Detection/best.onnx";
+        const std::string classes_path = "data/Object-Detection/classes.names";
+        config.features.push_back(std::make_shared<YOLOVideoDetector>(model_path, classes_path));
+        std::cout << "Object detection enabled\n";
       } else if (feature == "stops") {
         /************* Stop Sign Detection Implementation HERE ****************/
-        const std::string detector_path =
-            "src/code-for-stop-sign-training-and-detection/training/"
-            "stop_sign_hog_detector.yml";
+        const std::string detector_path = "src/code-for-stop-sign-training-and-detection/training/"
+                                          "stop_sign_hog_detector.yml";
 
-        config.features.push_back(
-            std::make_shared<DetectStopSign>(detector_path));
+        config.features.push_back(std::make_shared<DetectStopSign>(detector_path));
 
         std::cout << "Stop sign detection enabled\n";
       }
@@ -163,12 +146,36 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
   return config;
 }
 
-void put_fps_text(cv::Mat &src, const steady_clock::time_point &start_time,
-                  const steady_clock::time_point &end_time) {
-  const double elapsed_time =
-      1.0 / std::chrono::duration<double>(end_time - start_time).count();
+void put_fps_text(cv::Mat &src, const steady_clock::time_point &start_time, const steady_clock::time_point &end_time) {
+  const double elapsed_time = 1.0 / std::chrono::duration<double>(end_time - start_time).count();
   std::stringstream ss{};
   ss << std::fixed << std::setprecision(1) << elapsed_time << "FPS";
-  cv::putText(src, ss.str(), cv::Point(20, 40), cv::FONT_HERSHEY_SIMPLEX, 0.8,
-              cv::Scalar(0, 255, 255), 2);
+  cv::putText(src, ss.str(), cv::Point(20, 40), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 255), 2);
+}
+
+cv::Mat run_features_async(const cv::Mat &frame, const std::vector<std::shared_ptr<ADASFeature>> &adas_features) {
+  std::vector<std::future<cv::Mat>> futures;
+  futures.reserve(adas_features.size());
+
+
+  for (auto &feature : adas_features) {
+    futures.push_back(std::async(std::launch::async, [feature, &frame]() -> cv::Mat {
+      cv::Mat feature_annotation = frame.clone();
+      return feature->process(feature_annotation);
+    }));
+  }
+
+  cv::Mat merged_annotations = frame.clone();
+  for (auto& future : futures) {
+    cv::Mat feature_result = future.get();
+
+    cv::Mat diff, mask;
+    cv::absdiff(feature_result, frame, diff);
+    cv::cvtColor(diff, mask, cv::COLOR_BGR2GRAY);
+    cv::threshold(mask, mask, 10, 255, cv::THRESH_BINARY);
+
+    // Stamp feature drawing onto final frame without fading background
+    feature_result.copyTo(merged_annotations, mask);
+  }
+  return merged_annotations;
 }
