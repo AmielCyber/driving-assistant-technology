@@ -76,12 +76,11 @@ int main(int argc, char **argv) {
     for (auto &feature : config->features) {
       // Clock start time
       start_time = steady_clock::now();
-      cv::Mat annotated_frame = frame.clone();
-      cv::Mat feature_frame = feature->process(annotated_frame);
+      output_frame = feature->process(output_frame);
       // Clock end time
       end_time = steady_clock::now();
-      put_fps_text(feature_frame, start_time, end_time);
-      cv::imshow(feature->get_feature_name(), feature_frame);
+      put_fps_text(output_frame, start_time, end_time);
+      cv::imshow(feature->get_feature_name(), output_frame);
     }
     // Save output to video filename if set
     if (config->store_filename.has_value()) {
@@ -110,7 +109,7 @@ int main(int argc, char **argv) {
       if (!writer.isOpened()) {
         writer.open(config->store_filename.value(),
                     cv::VideoWriter::fourcc('m', 'p', '4', 'v'), fps,
-                    frame.size());
+                    videoSize);
         if (!writer.isOpened()) {
           // Check again if writer failed to open
           std::cerr << "Failed to open output video stream\n";
