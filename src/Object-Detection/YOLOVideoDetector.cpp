@@ -14,6 +14,30 @@ YOLOVideoDetector::YOLOVideoDetector(const string& modelPath,
 {
     loadClasses(classFilePath);
     loadModel(modelPath);
+
+    // Open the log
+    logFile.open("detections.csv");
+    // This is the structure
+    if (logFile.is_open())
+    {
+        logFile << "frame,class,confidence,"
+                << "center_x,center_y,"
+                << "left,top,width,height,"
+                << "frame_width,frame_height\n";
+    }
+    else // In case the log cannot be created
+    {
+        cerr << "Cannot open detections.csv for writing.\n";
+    }
+}
+
+// Destructor to close the log at the end of the program
+YOLOVideoDetector::~YOLOVideoDetector()
+{
+    if (logFile.is_open())
+    {
+        logFile.close();
+    }
 }
 
 // Helper to load the classes names used in the detection Default is classes.names
@@ -38,20 +62,25 @@ void YOLOVideoDetector::loadClasses(const string& filename)
 // Helper to load the YOLO trained Model used in the objects detection
 void YOLOVideoDetector::loadModel(const string& modelPath)
 {
+    // This provides flexibility to try new trained models
     net = readNet(modelPath);
-    net.setPreferableBackend(DNN_BACKEND_OPENCV);
-    net.setPreferableTarget(DNN_TARGET_CPU);
+    net.setPreferableBackend(DNN_BACKEND_OPENCV);// default OpenCV for the neural network
+    net.setPreferableTarget(DNN_TARGET_CPU);// Default the CPU for processing
 }
 
-// Main method to detect objects
-cv::Mat YOLOVideoDetector::process(cv::Mat& frame)
+// Main method to detect objects, receive a frame and provide a processed frame
+// This is our pipe line design
+cv::Mat YOLOVideoDetector::process(cv::Mat &frame)
 {
-    std::vector<int> classIds;
-    std::vector<float> confidences;
-    std::vector<cv::Rect> boxes;
+    // Variables for the detected objects and highlight them in the frame
+    std::vector<int> classIds; // Vector to store the detected classes
+    std::vector<float> confidences; // Vector to store the detected confidence rates
+    std::vector<cv::Rect> boxes; // Vector to store the boxes for each detected object
 
+    // Launch the detection method and send the frame and recieve all the detected object info.
     detectObjects(frame, classIds, confidences, boxes);
 
+    // sequence of the detected objects from the neural network
     std::vector<int> indices;
 
     cv::dnn::NMSBoxes(
@@ -62,17 +91,29 @@ cv::Mat YOLOVideoDetector::process(cv::Mat& frame)
         indices
     );
 
+    // for all detected object, create a box with level and confidence score in the output frame
     for (int idx : indices)
     {
         cv::Rect box = boxes[idx];
         std::string className = getClassName(classIds[idx]);
+        
+        // Write a record for each of the detected objects in the log
+        logDetection(
+            frameNumber, // Num of frame
+            className, // Class
+            confidences[idx], // Confidence of the detection
+            box, // Box of the detected object
+            frame.size() // Size of the frame
+        );
 
         drawDetection(frame, box, className, confidences[idx]);
     }
 
+    frameNumber++;   // next frame
     return frame;
 }
 
+// Control for the main cpp to identify what feature is performing
 std::string YOLOVideoDetector::get_feature_name()
 {
     return "objects";
@@ -84,7 +125,7 @@ void YOLOVideoDetector::detectObjects(const Mat& frame, // Frame
                                       vector<float>& confidences, // detection confidence
                                       vector<Rect>& boxes) // List of boxes created by YOLO model
 {
-    // Variables needed for the calculation
+    // Variables needed for the calculation frame size
     int imgWidth = frame.cols;
     int imgHeight = frame.rows;
 
@@ -121,7 +162,7 @@ void YOLOVideoDetector::detectObjects(const Mat& frame, // Frame
             transpose(output, output);
     }
 
-    // Preparing how the outputs will be received in the main loop
+    // Preparing how the boxes will be located in the frame
     float xFactor = static_cast<float>(imgWidth) / INPUT_WIDTH;
     float yFactor = static_cast<float>(imgHeight) / INPUT_HEIGHT;
 
@@ -287,4 +328,32 @@ string YOLOVideoDetector::getClassName(int classId) const
     }
 
     return to_string(classId);
+}
+
+// Method to write the detection log
+void YOLOVideoDetector::logDetection(int frameNumber,
+                                     const std::string& className,
+                                     float confidence,
+                                     const cv::Rect& box,
+                                     const cv::Size& frameSize)
+{
+    if (!logFile.is_open())
+        return;
+
+    // Calculate the box center
+    float centerX = box.x + box.width * 0.5f;
+    float centerY = box.y + box.height * 0.5f;
+
+    // format the info for the record
+    logFile << frameNumber << ","
+            << className << ","
+            << std::fixed << std::setprecision(3) << confidence << ","
+            << centerX << ","
+            << centerY << ","
+            << box.x << ","
+            << box.y << ","
+            << box.width << ","
+            << box.height << ","
+            << frameSize.width << ","
+            << frameSize.height << "\n";
 }
