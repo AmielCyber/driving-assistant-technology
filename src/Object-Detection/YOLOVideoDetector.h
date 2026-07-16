@@ -16,19 +16,24 @@ public:
     YOLOVideoDetector(const std::string& modelPath,
                       const std::string& classFilePath);
 
-    cv::Mat process(cv::Mat& frame) override;
+    cv::Mat process(cv::Mat &frame) override;
     std::string get_feature_name() override;
     
+    ~YOLOVideoDetector();
+    
 private:
-    static constexpr float SCORE_THRESHOLD = 0.25f;
-    static constexpr float CONFIDENCE_THRESHOLD = 0.25f;
-    static constexpr float NMS_THRESHOLD = 0.45f;
+    static constexpr float SCORE_THRESHOLD = 0.50;//0.25f;
+    static constexpr float CONFIDENCE_THRESHOLD = 0.50f;//0.25f;
+    static constexpr float NMS_THRESHOLD = 0.50;//0.45f;
 
     static constexpr int INPUT_WIDTH = 640;
     static constexpr int INPUT_HEIGHT = 640;
 
     cv::dnn::Net net;
     std::vector<std::string> classNames;
+    
+    std::ofstream logFile;
+    int frameNumber = 0;
 
     void loadClasses(const std::string& filename);
     void loadModel(const std::string& modelPath);
@@ -46,6 +51,12 @@ private:
     void drawFPS(cv::Mat& frame, int64& previousTick);
 
     std::string getClassName(int classId) const;
+    
+    void logDetection(int frameNumber,
+                      const std::string& className,
+                      float confidence,
+                      const cv::Rect& box,
+                      const cv::Size& frameSize);
 };
 
 #endif
