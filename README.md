@@ -106,19 +106,19 @@ Show all features
 Show Lane Departure System Feature
 
 ```bash
-./build/LaneDeparture --video=./test-data/22400001.AVI --show=lanes 
+./build/DriveMe --video=./test-data/22400001.AVI --show=lanes 
 ```
 
 Show Stop Sign Detection
 
 ```bash
-./build/LaneDeparture --video=./test-data/22400001.AVI --show=stops 
+./build/DriveMe --video=./test-data/22400001.AVI --show=stops 
 ```
 
 Show Road Objects
 
 ```bash
-./build/LaneDeparture --video=./test-data/22400001.AVI --show=objects 
+./build/DriveMe --video=./test-data/22400001.AVI --show=objects 
 ```
 
 ## Training Source
