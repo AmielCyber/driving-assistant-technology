@@ -16,6 +16,7 @@ cv::Mat LaneDeparture::process(cv::Mat &frame) {
   const cv::Mat roi_frame = apply_region_of_interest(canny_frame);      // Perform Region of Interest (ROI)
   const std::vector<cv::Vec4i> hough_lines = get_probabilistic_hough_lines(roi_frame); // Perform HoughP
   const LaneState state = analyze_lane(hough_lines, frame.cols, frame.rows);           // Get Lane State
+  lane_state_logger.log_lane_departure_status(state);
   draw_overlay(state, frame); // Draw Annotations based on the lane state
 
   return frame;
