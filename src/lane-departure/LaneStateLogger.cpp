@@ -11,7 +11,7 @@ void LaneStateLogger::log_lane_departure_status(const LaneState &state) {
   << detected_left_lane << ','
   << detected_right_lane << ','
   << left_lane_status << ','
-  << right_lane_status << std::endl;
+  << right_lane_status << '\n';
 
   ++frame_number;
 }
