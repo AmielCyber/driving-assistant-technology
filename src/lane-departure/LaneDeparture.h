@@ -2,6 +2,7 @@
 #define LANE_DEPARTURE_H
 #include "../ADASFeature.h"
 #include "LaneState.h"
+#include "LaneStateLogger.h"
 
 class LaneDeparture : public ADASFeature {
   std::string name{"Lane Departure Warning System"};
@@ -15,6 +16,7 @@ class LaneDeparture : public ADASFeature {
   const double alert_threshold_from_center_ratio{0.15};
   // Threshold to select a line out of a cluster of lines from houghP
   double line_cluster_threshold_ratio{0.04};
+  LaneStateLogger lane_state_logger{};
 
 public:
   /**
