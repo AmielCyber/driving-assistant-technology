@@ -146,11 +146,75 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
   return config;
 }
 
-void put_fps_text(cv::Mat &src, const steady_clock::time_point &start_time, const steady_clock::time_point &end_time) {
-  const double elapsed_time = 1.0 / std::chrono::duration<double>(end_time - start_time).count();
-  std::stringstream ss{};
-  ss << std::fixed << std::setprecision(1) << elapsed_time << "FPS";
-  cv::putText(src, ss.str(), cv::Point(20, 40), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 255), 2);
+// Circular version to show processing speed
+void put_fps_text(cv::Mat &src,
+                  const steady_clock::time_point &start_time,
+                  const steady_clock::time_point &end_time)
+{
+    const double elapsed =
+        std::chrono::duration<double>(end_time - start_time).count();
+
+    // Avoid division by zero and keep the display within 0.0–999.9.
+    const double fps = (elapsed > 0.0)
+                           ? std::min(999.9, 1.0 / elapsed)
+                           : 999.9;
+
+    std::stringstream speedText;
+    speedText << std::fixed << std::setprecision(1) << fps;
+
+    const std::string fpsLabel = "FPS";
+
+    const int radius = 62;
+    const cv::Point center(radius + 12, radius + 12);
+
+    // Black circle with thin green perimeter.
+    cv::circle(src, center, radius, cv::Scalar(0, 0, 0), cv::FILLED);
+    cv::circle(src, center, radius, cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
+
+    const double speedScale = 1.15;
+    const int speedThickness = 2;
+    const cv::Size speedSize = cv::getTextSize(
+        speedText.str(),
+        cv::FONT_HERSHEY_SIMPLEX,
+        speedScale,
+        speedThickness,
+        nullptr);
+
+    const double labelScale = 0.55;
+    const int labelThickness = 1;
+    const cv::Size labelSize = cv::getTextSize(
+        fpsLabel,
+        cv::FONT_HERSHEY_SIMPLEX,
+        labelScale,
+        labelThickness,
+        nullptr);
+
+    const int lineGap = 8;
+    const int totalHeight = speedSize.height + lineGap + labelSize.height;
+    const int speedY = center.y - totalHeight / 2 + speedSize.height;
+    const int labelY = speedY + lineGap + labelSize.height;
+
+    // Speed: white, one decimal place.
+    cv::putText(
+        src,
+        speedText.str(),
+        cv::Point(center.x - speedSize.width / 2, speedY),
+        cv::FONT_HERSHEY_SIMPLEX,
+        speedScale,
+        cv::Scalar(255, 255, 255),
+        speedThickness,
+        cv::LINE_AA);
+
+    // Label: smaller white text below.
+    cv::putText(
+        src,
+        fpsLabel,
+        cv::Point(center.x - labelSize.width / 2, labelY),
+        cv::FONT_HERSHEY_SIMPLEX,
+        labelScale,
+        cv::Scalar(255, 255, 255),
+        labelThickness,
+        cv::LINE_AA);
 }
 
 cv::Mat run_features_async(const cv::Mat &frame, const std::vector<std::shared_ptr<ADASFeature>> &adas_features) {
