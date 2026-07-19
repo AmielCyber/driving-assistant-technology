@@ -9,14 +9,44 @@
 #include <sstream>
 
 DetectStopSign::DetectStopSign(
-    const std::string &detector_path) {
+    const std::string &detector_path,
+    const bool has_log,
+    const std::string &log_filename)
+    : has_log{has_log} {
 
   if (!hog.load(detector_path)) {
     throw std::runtime_error(
-        "Could not load HOG stop-sign detector: " + detector_path);
+        "Could not load HOG stop-sign detector: " +
+        detector_path);
   }
 
   hog.nlevels = number_of_levels;
+
+  // Do not create or open a CSV file when logging is disabled.
+  if (!this->has_log) {
+    return;
+  }
+
+  log_file.open(
+      log_filename,
+      std::ios::out | std::ios::trunc);
+
+  if (!log_file.is_open()) {
+    throw std::runtime_error(
+        "Could not open stop-sign CSV log file: " +
+        log_filename);
+  }
+
+  // Write the CSV column headings once.
+  log_file
+      << "frame_number,"
+      << "detection_index,"
+      << "red_percent,"
+      << "white_percent,"
+      << "center_x,"
+      << "center_y,"
+      << "vertex_count,"
+      << "octagon_like\n";
 }
 
 cv::Mat DetectStopSign::process(cv::Mat &frame) {
@@ -24,6 +54,10 @@ cv::Mat DetectStopSign::process(cv::Mat &frame) {
   if (frame.empty()) {
     return frame;
   }
+
+  // Advance the internal frame counter only when logging is enabled.
+  const std::uint64_t current_frame_number =
+      has_log ? frame_number++ : 0;
 
   // Define the centered vertical region searched by HOG.
   const cv::Rect road_sign_roi_rectangle =
@@ -123,6 +157,13 @@ cv::Mat DetectStopSign::process(cv::Mat &frame) {
             octagon_like});
   }
 
+  // Write one CSV row for every accepted stop-sign detection.
+    if (has_log) {
+    log_detections(
+        current_frame_number,
+        accepted_detections);
+    }
+
   // Draw only candidates that passed every enabled verification stage.
   draw_detections(
       frame,
@@ -133,6 +174,56 @@ cv::Mat DetectStopSign::process(cv::Mat &frame) {
 
 std::string DetectStopSign::get_feature_name() {
   return name;
+}
+
+void DetectStopSign::log_detections(
+    const std::uint64_t current_frame_number,
+    const std::vector<StopSignDetection> &detections) {
+
+  // Logging was not requested, or the file was not opened.
+  if (!has_log || !log_file.is_open()) {
+    return;
+  }
+
+  for (std::size_t index = 0;
+       index < detections.size();
+       ++index) {
+
+    const StopSignDetection &detection =
+        detections[index];
+
+    // Report the center of the bounding box as the
+    // approximate detection location.
+    const int center_x =
+        detection.rectangle.x +
+        detection.rectangle.width / 2;
+
+    const int center_y =
+        detection.rectangle.y +
+        detection.rectangle.height / 2;
+
+    // Convert ratios such as 0.1842 into percentages
+    // such as 18.42.
+    const double red_percent =
+        detection.red_pixel_ratio * 100.0;
+
+    const double white_percent =
+        detection.white_pixel_ratio * 100.0;
+
+    log_file
+        << current_frame_number << ','
+        << index + 1 << ','
+        << std::fixed
+        << std::setprecision(2)
+        << red_percent << ','
+        << white_percent << ','
+        << center_x << ','
+        << center_y << ','
+        << detection.vertex_count << ','
+        << std::boolalpha
+        << detection.octagon_like
+        << '\n';
+  }
 }
 
 void DetectStopSign::draw_detections(

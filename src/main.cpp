@@ -95,7 +95,7 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
                             "{video v | | Video file name}"
                             "{show s | | Features to show separated by commas. Example: "
                             "--show=stops,lanes,objects}"
-                            "{log l | | Debug features}"
+                            "{log l | false | Debug features to a csv file}" // give log a default value of false, added by Julia 7/19/2026, can remove if we need to 
                             "{store o | | Store the results back in a video file name.}"};
 
   const cv::CommandLineParser parser{argc, argv, keys};
@@ -138,7 +138,8 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
         const std::string detector_path = "src/code-for-stop-sign-training-and-detection/training/"
                                           "stop_sign_hog_detector.yml";
 
-        config.features.push_back(std::make_shared<DetectStopSign>(detector_path));
+        config.features.push_back(std::make_shared<DetectStopSign>(detector_path,
+        has_log)); // Pass has_log to DetectStopSign constructor
 
         std::cout << "Stop sign detection enabled\n";
       }

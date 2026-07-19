@@ -10,6 +10,9 @@
 
 #include <opencv2/core.hpp>
 
+#include <cstdint>
+#include <fstream>
+
 /**
  * Detects stop signs using a trained OpenCV HOG detector.
  */
@@ -20,7 +23,10 @@ public:
    *
    * @param detector_path Path to the HOG detector YAML file.
    */
-  explicit DetectStopSign(const std::string &detector_path);
+  explicit DetectStopSign(const std::string &detector_path,
+    bool has_log = false,
+    const std::string &log_filename =
+        "stop_sign_detections.csv");
 
   /**
    * Detect and annotate stop signs in one frame.
@@ -49,6 +55,10 @@ private:
     int vertex_count;
     bool octagon_like;
     };
+
+    bool has_log{false};
+    std::ofstream log_file;
+    std::uint64_t frame_number{1};//start log frame number at 1, incremented after each frame is processed
 
   /**
    * Return a full-width ROI covering the bottom portion of the frame.
@@ -92,6 +102,13 @@ private:
       const cv::UMat &redMask,
       const cv::Rect &detectionRectangle,
       int &detectedVertexCount);
+
+  /**
+   * Write one CSV row for every accepted detection.
+   */
+  void log_detections(
+      std::uint64_t current_frame_number,
+      const std::vector<StopSignDetection> &detections);
 
   /**
    * Draw rectangles and labels for detected stop signs.
