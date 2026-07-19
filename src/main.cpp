@@ -95,6 +95,7 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
                             "{video v | | Video file name}"
                             "{show s | | Features to show separated by commas. Example: "
                             "--show=stops,lanes,objects}"
+                            "{log l | | Debug features}"
                             "{store o | | Store the results back in a video file name.}"};
 
   const cv::CommandLineParser parser{argc, argv, keys};
@@ -104,6 +105,7 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
   }
 
   AppConfig config{};
+  bool has_log = parser.get<bool>("log");
   // --help
   if (parser.has("help")) {
     parser.printMessage();
