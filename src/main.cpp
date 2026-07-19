@@ -2,6 +2,7 @@
 #include "./code-for-stop-sign-training-and-detection/DetectStopSign.h"
 #include "./lane-departure/LaneDeparture.h"
 #include "ADASFeature.h"
+#include "ADASFeatureThreadPool.h"
 #include <chrono>
 #include <cstdlib>
 #include <future>
@@ -17,7 +18,6 @@
 using std::chrono::steady_clock;
 
 struct AppConfig {
-  // Will change type to the interface
   std::vector<std::shared_ptr<ADASFeature>> features{};
   std::optional<std::string> store_filename;
   std::string video_source{};
@@ -26,7 +26,8 @@ struct AppConfig {
 
 std::optional<AppConfig> parse_arguments(int argc, char **argv);
 void put_fps_text(cv::Mat &src, const steady_clock::time_point &start_time, const steady_clock::time_point &end_time);
-cv::Mat run_features_async(const cv::Mat &frame, const std::vector<std::shared_ptr<ADASFeature>> &adas_features);
+cv::Mat run_features_async(const cv::Mat &frame, const std::vector<std::shared_ptr<ADASFeature>> &adas_features,
+                           ADASFeatureThreadPool &pool);
 
 int main(int argc, char **argv) {
   // Parse User Arguments if any.
@@ -52,6 +53,9 @@ int main(int argc, char **argv) {
   if (fps < 1.0 || fps > 60.0)
     fps = 30.0; // Cap at 30 fps
 
+  const size_t pool_size = config->features.size();
+  ADASFeatureThreadPool features_pool{pool_size};
+
   constexpr int ESCAPE_KEY = 27;
   cv::Mat frame, dst, annotated_frame;
   std::chrono::time_point<steady_clock> start_time;
@@ -61,7 +65,7 @@ int main(int argc, char **argv) {
     if (frame.empty())
       break;
     start_time = steady_clock::now();
-    annotated_frame = run_features_async(frame, config->features);
+    annotated_frame = run_features_async(frame, config->features, features_pool);
     end_time = steady_clock::now();
     put_fps_text(annotated_frame, start_time, end_time);
     // Save output to video filename if set
@@ -147,90 +151,69 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
 }
 
 // Circular version to show processing speed
-void put_fps_text(cv::Mat &src,
-                  const steady_clock::time_point &start_time,
-                  const steady_clock::time_point &end_time)
-{
-    const double elapsed =
-        std::chrono::duration<double>(end_time - start_time).count();
+void put_fps_text(cv::Mat &src, const steady_clock::time_point &start_time, const steady_clock::time_point &end_time) {
+  const double elapsed = std::chrono::duration<double>(end_time - start_time).count();
 
-    // Avoid division by zero and keep the display within 0.0–999.9.
-    const double fps = (elapsed > 0.0)
-                           ? std::min(999.9, 1.0 / elapsed)
-                           : 999.9;
+  // Avoid division by zero and keep the display within 0.0–999.9.
+  const double fps = (elapsed > 0.0) ? std::min(999.9, 1.0 / elapsed) : 999.9;
 
-    std::stringstream speedText;
-    speedText << std::fixed << std::setprecision(1) << fps;
+  std::stringstream speedText;
+  speedText << std::fixed << std::setprecision(1) << fps;
 
-    const std::string fpsLabel = "FPS";
+  const std::string fpsLabel = "FPS";
 
-    const int radius = 62;
-    const cv::Point center(radius + 12, radius + 12);
+  const int radius = 62;
+  const cv::Point center(radius + 12, radius + 12);
 
-    // Black circle with thin green perimeter.
-    cv::circle(src, center, radius, cv::Scalar(0, 0, 0), cv::FILLED);
-    cv::circle(src, center, radius, cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
+  // Black circle with thin green perimeter.
+  cv::circle(src, center, radius, cv::Scalar(0, 0, 0), cv::FILLED);
+  cv::circle(src, center, radius, cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
 
-    const double speedScale = 1.15;
-    const int speedThickness = 2;
-    const cv::Size speedSize = cv::getTextSize(
-        speedText.str(),
-        cv::FONT_HERSHEY_SIMPLEX,
-        speedScale,
-        speedThickness,
-        nullptr);
+  constexpr double speedScale = 1.15;
+  constexpr int speedThickness = 2;
+  const cv::Size speedSize =
+      cv::getTextSize(speedText.str(), cv::FONT_HERSHEY_SIMPLEX, speedScale, speedThickness, nullptr);
 
-    const double labelScale = 0.55;
-    const int labelThickness = 1;
-    const cv::Size labelSize = cv::getTextSize(
-        fpsLabel,
-        cv::FONT_HERSHEY_SIMPLEX,
-        labelScale,
-        labelThickness,
-        nullptr);
+  constexpr double labelScale = 0.55;
+  constexpr int labelThickness = 1;
+  const cv::Size labelSize = cv::getTextSize(fpsLabel, cv::FONT_HERSHEY_SIMPLEX, labelScale, labelThickness, nullptr);
 
-    const int lineGap = 8;
-    const int totalHeight = speedSize.height + lineGap + labelSize.height;
-    const int speedY = center.y - totalHeight / 2 + speedSize.height;
-    const int labelY = speedY + lineGap + labelSize.height;
+  constexpr int lineGap = 8;
+  const int totalHeight = speedSize.height + lineGap + labelSize.height;
+  const int speedY = center.y - totalHeight / 2 + speedSize.height;
+  const int labelY = speedY + lineGap + labelSize.height;
 
-    // Speed: white, one decimal place.
-    cv::putText(
-        src,
-        speedText.str(),
-        cv::Point(center.x - speedSize.width / 2, speedY),
-        cv::FONT_HERSHEY_SIMPLEX,
-        speedScale,
-        cv::Scalar(255, 255, 255),
-        speedThickness,
-        cv::LINE_AA);
+  // Speed: white, one decimal place.
+  cv::putText(src, speedText.str(), cv::Point(center.x - speedSize.width / 2, speedY), cv::FONT_HERSHEY_SIMPLEX,
+              speedScale, cv::Scalar(255, 255, 255), speedThickness, cv::LINE_AA);
 
-    // Label: smaller white text below.
-    cv::putText(
-        src,
-        fpsLabel,
-        cv::Point(center.x - labelSize.width / 2, labelY),
-        cv::FONT_HERSHEY_SIMPLEX,
-        labelScale,
-        cv::Scalar(255, 255, 255),
-        labelThickness,
-        cv::LINE_AA);
+  // Label: smaller white text below.
+  cv::putText(src, fpsLabel, cv::Point(center.x - labelSize.width / 2, labelY), cv::FONT_HERSHEY_SIMPLEX, labelScale,
+              cv::Scalar(255, 255, 255), labelThickness, cv::LINE_AA);
 }
 
-cv::Mat run_features_async(const cv::Mat &frame, const std::vector<std::shared_ptr<ADASFeature>> &adas_features) {
+cv::Mat run_features_async(const cv::Mat &frame, const std::vector<std::shared_ptr<ADASFeature>> &adas_features,
+                           ADASFeatureThreadPool &pool) {
   std::vector<std::future<cv::Mat>> futures;
   futures.reserve(adas_features.size());
 
-
   for (auto &feature : adas_features) {
-    futures.push_back(std::async(std::launch::async, [feature, &frame]() -> cv::Mat {
-      cv::Mat feature_annotation = frame.clone();
-      return feature->process(feature_annotation);
+    futures.push_back(pool.submit([feature, &frame]() -> cv::Mat {
+      try {
+        cv::Mat feature_annotation = frame.clone();
+        return feature->process(feature_annotation);
+      } catch (const std::exception &e) {
+        std::cerr << feature->get_feature_name() << " failed to process: " << e.what() << '\n';
+        return frame.clone();  // Return original to not crash other threads
+      }
     }));
   }
 
+  // The following code block was generated by the free version of Claude
+  // prompt: "in C++ opencv how can I merged three images that contain the same image but with different
+  // annotations"
   cv::Mat merged_annotations = frame.clone();
-  for (auto& future : futures) {
+  for (auto &future : futures) {
     cv::Mat feature_result = future.get();
 
     cv::Mat diff, mask;
@@ -241,5 +224,6 @@ cv::Mat run_features_async(const cv::Mat &frame, const std::vector<std::shared_p
     // Stamp feature drawing onto final frame without fading background
     feature_result.copyTo(merged_annotations, mask);
   }
+
   return merged_annotations;
 }

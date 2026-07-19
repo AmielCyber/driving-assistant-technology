@@ -59,6 +59,8 @@ add_executable(DriveMe
         src/Object-Detection/YOLOVideoDetector.cpp
         src/lane-departure/LaneStateLogger.cpp
         src/lane-departure/LaneStateLogger.h
+        src/ADASFeatureThreadPool.cpp
+        src/ADASFeatureThreadPool.h
 )
 
 target_link_libraries(DriveMe PRIVATE ${OpenCV_LIBS})
