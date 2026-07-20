@@ -269,6 +269,7 @@ std::optional<cv::Vec4i> LaneDeparture::calculate_closest_lane(const std::vector
 
 void LaneDeparture::draw_overlay(const LaneState &state, cv::Mat &frame) {
   const cv::Scalar center_lane_color(246, 191, 3);
+  const cv::Scalar steering_hint_color(0, 220, 255);
   const cv::Scalar warning_lane_color(41, 139, 252);
   const cv::Scalar departure_lane_color(26, 43, 251);
   const cv::Scalar estimate_lane_color(151, 157, 170);
@@ -299,25 +300,31 @@ void LaneDeparture::draw_overlay(const LaneState &state, cv::Mat &frame) {
   }
 
   // Draw Circle to reference where the car is at.
-  cv::circle(frame, cv::Point(state.x_lane_center, frame.rows - 50), 8, car_center_color, -1);
+  cv::circle(frame, cv::Point(state.x_car_center, frame.rows - 50), 8, car_center_color, -1);
 
   // Draw Car Center (Camera Center) for reference
-  cv::circle(frame, cv::Point(state.x_car_center, frame.rows - 50), 5, cv::Scalar(255, 255, 255), -1);
+  const int steering_thresh = static_cast<int>(state.x_car_center * warning_threshold_from_center_ratio/2);
 
-  const int left_wheel_x = state.x_car_center - state.x_car_center * alert_threshold_from_center_ratio;
-  const int right_wheel_x = state.x_car_center + state.x_car_center * alert_threshold_from_center_ratio;
-  const int warning_left_line = state.x_car_center - state.x_car_center * warning_threshold_from_center_ratio;
-  const int warning_right_line = state.x_car_center + state.x_car_center * warning_threshold_from_center_ratio;
+  const int offset = state.x_lane_center - state.x_car_center;
 
-  cv::line(frame, cv::Point(left_wheel_x, frame.rows - 50), cv::Point(left_wheel_x, frame.rows - 25),
-           departure_lane_color, 2, cv::LINE_AA);
-  cv::line(frame, cv::Point(right_wheel_x, frame.rows - 50), cv::Point(right_wheel_x, frame.rows - 25),
-           departure_lane_color, 2, cv::LINE_AA);
+  std::string steering_hint = "|  |";
 
-  cv::line(frame, cv::Point(warning_left_line, frame.rows - 50), cv::Point(warning_left_line, frame.rows - 25),
-           warning_lane_color, 2, cv::LINE_AA);
-  cv::line(frame, cv::Point(warning_right_line, frame.rows - 50), cv::Point(warning_right_line, frame.rows - 25),
-           warning_lane_color, 2, cv::LINE_AA);
+  if (offset < -steering_thresh) {
+    steering_hint = "<<";
+  }
+  else if (offset > steering_thresh) {
+    steering_hint = ">>";
+  }
+  if (!steering_hint.empty()) {
+    cv::putText(frame,
+                steering_hint,
+                cv::Point(state.x_lane_center - 18, frame.rows - 42),
+                cv::FONT_HERSHEY_DUPLEX,
+                0.8,
+                steering_hint_color,
+                2,
+                cv::LINE_AA);
+  }
 
   if (state.right_status == DepartureStatus::ALERT || state.left_status == DepartureStatus::ALERT) {
     draw_alert_triangle(frame);
