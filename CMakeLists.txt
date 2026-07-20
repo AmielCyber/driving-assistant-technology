@@ -61,6 +61,8 @@ add_executable(DriveMe
         src/lane-departure/LaneStateLogger.h
         src/ADASFeatureThreadPool.cpp
         src/ADASFeatureThreadPool.h
+        src/AsyncLogger.cpp
+        src/AsyncLogger.h
 )
 
 target_link_libraries(DriveMe PRIVATE ${OpenCV_LIBS})
