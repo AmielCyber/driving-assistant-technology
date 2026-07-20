@@ -191,7 +191,7 @@ LaneDeparture::separate_lanes(const std::vector<cv::Vec4i> &lines, const int car
       // Estimated Left lane contender
       left_lines.push_back(l);
     } else if (slope > 0 && x1 > car_center_x && x2 > car_center_x) {
-      //  x_center  \
+      /*  x_center  \ */
       // Estimated right lane contender
       right_lines.push_back(l);
     }
