@@ -248,6 +248,7 @@ void LaneDeparture::draw_overlay(const LaneState &state, cv::Mat &frame) {
   const cv::Scalar departure_lane_color(26, 43, 251);
   const cv::Scalar car_center_color(219, 48, 134);
 
+  shade_lane_region(state, frame);
   // Helper lambda to map status to color
   auto get_color = [&](const DepartureStatus status) {
     if (status == DepartureStatus::ALERT)
@@ -336,4 +337,48 @@ void LaneDeparture::draw_alert_triangle(cv::Mat &frame) {
   cv::Size sz = cv::getTextSize("!", cv::FONT_HERSHEY_DUPLEX, fontScale, thickness, &baseline);
   cv::putText(frame, "!", {center.x - sz.width / 2, center.y + sz.height / 2}, cv::FONT_HERSHEY_DUPLEX, fontScale,
               color, thickness, cv::LINE_AA);
+}
+
+// GPT GENERATED CODE with LineDeparture.h, LaneDeparture.cpp, LaneState.h as uploads, before this commit with prompt:
+// "Implement a shade_lane_region function that will shade the two lines from the lane
+// state if it has two lanes or neither of status are DepartureStatus::Alert. Make the color shading green if both status are DepartureStatus:::SAFE, color orange if either one status is DepartureStatus::WARNING"
+void LaneDeparture::shade_lane_region(const LaneState &state,
+                                      cv::Mat &frame) {
+  // The region cannot be formed unless both lane boundaries are available.
+  if (!state.left_lane.has_value() || !state.right_lane.has_value()) {
+    return;
+  }
+
+  if (state.left_status == DepartureStatus::ALERT ||
+      state.right_status == DepartureStatus::ALERT) {
+    return;
+      }
+
+  const bool has_warning =
+      state.left_status == DepartureStatus::WARNING ||
+      state.right_status == DepartureStatus::WARNING;
+
+  // OpenCV uses BGR color order.
+  const cv::Scalar fill_color =
+      has_warning
+          ? cv::Scalar(0, 165, 255) // Orange
+          : cv::Scalar(0, 180, 0);  // Green
+
+  const cv::Vec4i &left = state.left_lane.value();
+  const cv::Vec4i &right = state.right_lane.value();
+
+  const std::vector<cv::Point> lane_polygon{
+        {left[0], left[1]},   // Left bottom
+        {left[2], left[3]},   // Left top
+        {right[2], right[3]}, // Right top
+        {right[0], right[1]}, // Right bottom
+    };
+
+  cv::Mat shading_layer = frame.clone();
+  cv::fillConvexPoly(shading_layer, lane_polygon, fill_color, cv::LINE_AA);
+
+  constexpr double shading_opacity = 0.20;
+  cv::addWeighted(shading_layer, shading_opacity,
+                  frame, 1.0 - shading_opacity,
+                  0.0, frame);
 }

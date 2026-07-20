@@ -44,6 +44,7 @@ private:
   void evaluate_departure_status(LaneState &state) const;
   void draw_overlay(const LaneState &state, cv::Mat &frame);
   static void draw_alert_triangle(cv::Mat &frame);
+  void shade_lane_region( const LaneState &state, cv::Mat &frame);
 };
 
 #endif // LANE_DEPARTURE_H
