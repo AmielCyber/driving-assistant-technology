@@ -60,28 +60,36 @@ rm -rf build
 Generate Makefile for YOUR system in the build directory
 
 ```bash
-cmake -B build
+cmake -S . -B build
 ```
 
 **OR** generate Makefile with your custom onnxruntime path
 
 ```bash
-cmake -B build -Donnxruntime_dir=/path/to/onnxruntime
+cmake -S . -B build -Donnxruntime_dir=/path/to/onnxruntime
 ```
 
-Build generated Makefile in build directory
+Compile the project with the generated build directory
+
+```bash
+cmake --build build
+```
+
+**OR** Compile the project with the generated Makefile in the build directory
 
 ```bash
 make -C build
 ```
 
 # Additional Notes to Build Process
+
 There are dependencies among key platform libraries. We use three environment types for our development and testing: macOS with Apple M4/M5 chips, Ubuntu 24 virtual machines running inside macOS, and NVIDIA Jetson Orin. Since we try to maintain a standard level across the different runtime environments, we use OpenCV 4.13 and C++ for our bottom-up solutions, and OpenCV 4.13, C++, and ONNX for our AI-based solutions. In most cases, installing ONNX may upgrade OpenCV to 5.0.0 since it is the newest version when using brew install onnx and onnxruntime.
 
 We recommend following these commands to configure the CMakeLists.txt file in your environment and generate the Makefiles to compile our project source code more efficiently, depending on the environment you are testing:
 Build examples
 
 macOS
+
 ```bash
 rm -rf build
 cmake -S . -B build 
@@ -90,6 +98,7 @@ cmake –build build
 ```
 
 Ubuntu 24
+
 ```bash
 rm -rf build
 cmake -S . -B build 
@@ -99,6 +108,7 @@ cmake –build build
 ```
 
 Jetson Orin
+
 ```bash
 rm -rf build
 cmake -S . -B build 
@@ -106,7 +116,6 @@ cmake -S . -B build
 -DONNXRUNTIME_DIR=/usr/local/onnxruntime
 cmake –build build
 ```
-
 
 ## Run
 
@@ -127,31 +136,39 @@ Usage: DriveMe [params]
                 Features to show separated by commas. Example: --show=stops,lanes,objects
         -v, --video
                 Video file name
+        -l, --log
+                Log features to a csv file in the root directory
 
 ```
 
 Show all features
 
 ```bash
-./build/DriveMe --video=./test-data/22400001.AVI --show=stops,lanes,objects
+./build/DriveMe --show=stops,lanes,objects --video=./test-data/22400001.AVI
 ```
 
-Show Lane Departure System Feature
+Show Lane Departure Feature
 
 ```bash
-./build/DriveMe --video=./test-data/22400001.AVI --show=lanes 
+./build/DriveMe --show=lanes  --video=./test-data/22400001.AVI 
 ```
 
 Show Stop Sign Detection
 
 ```bash
-./build/DriveMe --video=./test-data/22400001.AVI --show=stops 
+./build/DriveMe --show=stops  --video=./test-data/22400001.AVI
 ```
 
 Show Road Objects
 
 ```bash
-./build/DriveMe --video=./test-data/22400001.AVI --show=objects 
+./build/DriveMe --show=objects  --video=./test-data/22400001.AVI
+```
+
+Log features in --show=
+
+```bash
+./build/DriveMe --log --show=objects,lanes,stops --video=./test-data/22400001.AVI 
 ```
 
 ## Training Source
