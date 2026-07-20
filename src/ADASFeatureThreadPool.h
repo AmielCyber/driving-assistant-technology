@@ -2,6 +2,7 @@
 #define ADAS_FEATURE_THREAD_POOL_H
 #include <future>
 #include <opencv2/core/mat.hpp>
+#include <queue>
 #include <thread>
 
 /**
@@ -22,8 +23,8 @@ public:
    */
   ~ADASFeatureThreadPool();
   // Rule of three, Since we overrode the default deconstructor
-  ADASFeatureThreadPool(const ADASFeatureThreadPool&) = delete;
-  ADASFeatureThreadPool& operator=(const ADASFeatureThreadPool&) = delete;
+  ADASFeatureThreadPool(const ADASFeatureThreadPool &) = delete;
+  ADASFeatureThreadPool &operator=(const ADASFeatureThreadPool &) = delete;
 
   /**
    * Submit a process image task to the thread pool.
@@ -36,6 +37,7 @@ public:
    * @return The number of worker threads in the thread pool
    */
   [[nodiscard]] size_t size() const noexcept;
+
 private:
   std::vector<std::thread> worker_threads;
   // ADASFeature implementation process tasks: cv::Mat process(cv::Mat&)
