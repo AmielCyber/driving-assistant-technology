@@ -75,6 +75,39 @@ Build generated Makefile in build directory
 make -C build
 ```
 
+# Additional Notes to Build Process
+There are dependencies among key platform libraries. We use three environment types for our development and testing: macOS with Apple M4/M5 chips, Ubuntu 24 virtual machines running inside macOS, and NVIDIA Jetson Orin. Since we try to maintain a standard level across the different runtime environments, we use OpenCV 4.13 and C++ for our bottom-up solutions, and OpenCV 4.13, C++, and ONNX for our AI-based solutions. In most cases, installing ONNX may upgrade OpenCV to 5.0.0 since it is the newest version when using brew install onnx and onnxruntime.
+
+We recommend following these commands to configure the CMakeLists.txt file in your environment and generate the Makefiles to compile our project source code more efficiently, depending on the environment you are testing:
+Build examples
+
+macOS
+```bash
+rm -rf build
+cmake -S . -B build 
+-DCMAKE_BUILD_TYPE=Release
+cmake –build build
+```
+
+Ubuntu 24
+```bash
+rm -rf build
+cmake -S . -B build 
+-DCMAKE_BUILD_TYPE=Release 
+-DONNXRUNTIME_DIR=/opt/onnxruntime
+cmake –build build
+```
+
+Jetson Orin
+```bash
+rm -rf build
+cmake -S . -B build 
+-DCMAKE_BUILD_TYPE=Release 
+-DONNXRUNTIME_DIR=/usr/local/onnxruntime
+cmake –build build
+```
+
+
 ## Run
 
 Help Usage:
