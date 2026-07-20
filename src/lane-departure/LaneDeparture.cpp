@@ -2,6 +2,9 @@
 
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
+#include <cmath>
+#include <algorithm>
+#include <limits>
 
 cv::Mat LaneDeparture::process(cv::Mat &frame) {
   cv::Mat hls, combined_mask, masked_frame;
@@ -24,23 +27,86 @@ cv::Mat LaneDeparture::process(cv::Mat &frame) {
 
 std::string LaneDeparture::get_feature_name() { return this->name; }
 
-cv::Mat LaneDeparture::apply_yellow_orange_lane_mask(const cv::Mat &hls_frame) {
-  cv::Mat yellow_mask, orange_mask;
-  const auto lower_yellow_thresh = cv::Scalar(0, 35, 40);
-  const auto upper_yellow_thresh = cv::Scalar(35, 255, 255);
-  cv::inRange(hls_frame, lower_yellow_thresh, upper_yellow_thresh, yellow_mask);
+cv::Mat LaneDeparture::apply_yellow_orange_lane_mask(
+    const cv::Mat &hls_frame
+) {
+  cv::Mat yellow_orange_mask;
 
-  return yellow_mask;
+  /*
+   * OpenCV HLS order:
+   * H = hue
+   * L = lightness
+   * S = saturation
+   *
+   * This range includes common yellow and orange road markings while
+   * excluding much of the low-saturation gray pavement.
+   */
+  const cv::Scalar lower_yellow_orange(8, 30, 70);
+  const cv::Scalar upper_yellow_orange(40, 255, 255);
+
+  cv::inRange(
+      hls_frame,
+      lower_yellow_orange,
+      upper_yellow_orange,
+      yellow_orange_mask
+  );
+
+  return clean_lane_mask(yellow_orange_mask);
 }
 
-cv::Mat LaneDeparture::apply_white_lane_mask(const cv::Mat &hls_frame) {
+cv::Mat LaneDeparture::apply_white_lane_mask(
+    const cv::Mat &hls_frame
+) {
   cv::Mat white_mask;
 
-  const auto lower_white_thresh = cv::Scalar(0, 100, 0);
-  const auto upper_white_thresh = cv::Scalar(180, 255, 255);
-  cv::inRange(hls_frame, lower_white_thresh, upper_white_thresh, white_mask);
+  /*
+   * Permit moderately dark/faded white markings by starting lightness
+   * at 115, but require relatively low saturation so bright colored
+   * objects are less likely to pass the mask.
+   */
+  const cv::Scalar lower_white(0, 115, 0);
+  const cv::Scalar upper_white(180, 255, 110);
 
-  return white_mask;
+  cv::inRange(
+      hls_frame,
+      lower_white,
+      upper_white,
+      white_mask
+  );
+
+  return clean_lane_mask(white_mask);
+}
+
+cv::Mat LaneDeparture::clean_lane_mask(const cv::Mat &mask) {
+  cv::Mat cleaned_mask;
+
+  const cv::Mat close_kernel = cv::getStructuringElement(
+      cv::MORPH_RECT,
+      cv::Size(5, 5)
+  );
+
+  const cv::Mat open_kernel = cv::getStructuringElement(
+      cv::MORPH_RECT,
+      cv::Size(3, 3)
+  );
+
+  // Close small gaps in worn or dashed lane markings.
+  cv::morphologyEx(
+      mask,
+      cleaned_mask,
+      cv::MORPH_CLOSE,
+      close_kernel
+  );
+
+  // Remove isolated single-pixel and small-region noise.
+  cv::morphologyEx(
+      cleaned_mask,
+      cleaned_mask,
+      cv::MORPH_OPEN,
+      open_kernel
+  );
+
+  return cleaned_mask;
 }
 
 cv::Mat LaneDeparture::apply_canny_edge_detection(const cv::Mat &frame) {
@@ -100,31 +166,75 @@ std::vector<cv::Vec4i> LaneDeparture::get_probabilistic_hough_lines(const cv::Ma
   return segments;
 }
 
-LaneState LaneDeparture::analyze_lane(const std::vector<cv::Vec4i> &lines, const int width, const int height) const {
+LaneState LaneDeparture::analyze_lane(
+    const std::vector<cv::Vec4i> &lines,
+    const int width,
+    const int height
+) {
   LaneState state;
-  state.x_car_center = static_cast<int>(car_x_center_ratio * width);
+  state.x_car_center = static_cast<int>(
+      car_x_center_ratio * width
+  );
 
-  // Convert percentage ratios to actual Y-pixel coordinates
-  const int y_top = static_cast<int>(height * horizon_y_ratio);
-  const int y_bottom = static_cast<int>(height * dashboard_y_ratio);
+  const int y_top = static_cast<int>(
+      height * horizon_y_ratio
+  );
 
-  // Separate lines into left and right line candidates
-  auto [left_lines, right_lines] = separate_lanes(lines, state.x_car_center);
+  const int y_bottom = static_cast<int>(
+      height * dashboard_y_ratio
+  );
 
-  // 2. Filter out outer lanes/bike lanes by clustering around closest x-intercept
-  state.left_lane = calculate_closest_lane(left_lines, y_bottom, y_top, state.x_car_center, width);
-  state.right_lane = calculate_closest_lane(right_lines, y_bottom, y_top, state.x_car_center, width);
+  auto [left_lines, right_lines] =
+      separate_lanes(lines, state.x_car_center);
 
-  // 3. Calculate lane center
-  if (state.left_lane && state.right_lane) {
-    const int left_bottom_x = state.left_lane.value()[0];
-    const int right_bottom_x = state.right_lane.value()[0];
-    state.x_lane_center = (left_bottom_x + right_bottom_x) / 2;
+  state.left_lane = calculate_closest_lane(
+      left_lines,
+      y_bottom,
+      y_top,
+      state.x_car_center,
+      width
+  );
+
+  state.right_lane = calculate_closest_lane(
+      right_lines,
+      y_bottom,
+      y_top,
+      state.x_car_center,
+      width
+  );
+
+  /*
+   * Learn lane width only from frames where both sides were directly
+   * detected. Do this before attempting an inferred lane.
+   */
+  if (state.left_lane.has_value() &&
+      state.right_lane.has_value()) {
+    update_lane_width_estimate(state, width);
+  }
+
+  /*
+   * If the left lane is visible and the right fog line is absent,
+   * infer the right lane from the previously learned lane width.
+   */
+  if (state.left_lane.has_value() &&
+      !state.right_lane.has_value()) {
+    estimate_missing_right_lane(state, width);
+  }
+
+  if (state.left_lane.has_value() &&
+      state.right_lane.has_value()) {
+    const int left_bottom_x =
+        state.left_lane.value()[0];
+
+    const int right_bottom_x =
+        state.right_lane.value()[0];
+
+    state.x_lane_center =
+        (left_bottom_x + right_bottom_x) / 2;
   } else {
     state.x_lane_center = state.x_car_center;
   }
 
-  // 4. Evaluate departure status based on percentage of frame width
   evaluate_departure_status(state);
 
   return state;
@@ -212,10 +322,192 @@ std::optional<cv::Vec4i> LaneDeparture::calculate_closest_lane(const std::vector
   return cv::Vec4i(x_bottom, y_bottom, x_top, y_top);
 }
 
+void LaneDeparture::update_lane_width_estimate(
+    const LaneState &state,
+    const int frame_width
+) {
+  if (!state.left_lane.has_value() ||
+      !state.right_lane.has_value()) {
+    return;
+  }
+
+  const cv::Vec4i &left = state.left_lane.value();
+  const cv::Vec4i &right = state.right_lane.value();
+
+  const double bottom_width =
+      static_cast<double>(right[0] - left[0]);
+
+  const double top_width =
+      static_cast<double>(right[2] - left[2]);
+
+  /*
+   * Reject geometrically implausible measurements. These limits are
+   * intentionally broad and should be calibrated against the videos.
+   */
+  const double minimum_bottom_width =
+      frame_width * 0.25;
+
+  const double maximum_bottom_width =
+      frame_width * 0.90;
+
+  const double minimum_top_width =
+      frame_width * 0.03;
+
+  const double maximum_top_width =
+      frame_width * 0.40;
+
+  const bool bottom_width_is_valid =
+      bottom_width >= minimum_bottom_width &&
+      bottom_width <= maximum_bottom_width;
+
+  const bool top_width_is_valid =
+      top_width >= minimum_top_width &&
+      top_width <= maximum_top_width;
+
+  if (!bottom_width_is_valid || !top_width_is_valid) {
+    return;
+  }
+
+  if (!smoothed_lane_width_bottom.has_value()) {
+    smoothed_lane_width_bottom = bottom_width;
+  } else {
+    smoothed_lane_width_bottom =
+        lane_width_smoothing_alpha * bottom_width +
+        (1.0 - lane_width_smoothing_alpha) *
+            smoothed_lane_width_bottom.value();
+  }
+
+  if (!smoothed_lane_width_top.has_value()) {
+    smoothed_lane_width_top = top_width;
+  } else {
+    smoothed_lane_width_top =
+        lane_width_smoothing_alpha * top_width +
+        (1.0 - lane_width_smoothing_alpha) *
+            smoothed_lane_width_top.value();
+  }
+}
+
+void LaneDeparture::estimate_missing_right_lane(
+    LaneState &state,
+    const int frame_width
+) const {
+  if (!state.left_lane.has_value()) {
+    return;
+  }
+
+  if (state.right_lane.has_value()) {
+    return;
+  }
+
+  if (!smoothed_lane_width_bottom.has_value() ||
+      !smoothed_lane_width_top.has_value()) {
+    return;
+  }
+
+  const cv::Vec4i &left = state.left_lane.value();
+
+  const int estimated_bottom_x = static_cast<int>(
+      std::lround(
+          left[0] + smoothed_lane_width_bottom.value()
+      )
+  );
+
+  const int estimated_top_x = static_cast<int>(
+      std::lround(
+          left[2] + smoothed_lane_width_top.value()
+      )
+  );
+
+  /*
+   * Reject the estimate if the projected right boundary is outside
+   * the frame or does not remain on the right side of the vehicle.
+   */
+  if (estimated_bottom_x <= state.x_car_center ||
+      estimated_bottom_x >= frame_width ||
+      estimated_top_x < 0 ||
+      estimated_top_x >= frame_width) {
+    return;
+  }
+
+  state.right_lane = cv::Vec4i(
+      estimated_bottom_x,
+      left[1],
+      estimated_top_x,
+      left[3]
+  );
+
+  state.right_lane_estimated = true;
+}
+
+void LaneDeparture::shade_lane_region(
+    const LaneState &state,
+    cv::Mat &frame
+) {
+  if (!state.left_lane.has_value() ||
+      !state.right_lane.has_value()) {
+    return;
+  }
+
+  const bool has_alert =
+      state.left_status == DepartureStatus::ALERT ||
+      state.right_status == DepartureStatus::ALERT;
+
+  if (has_alert) {
+    return;
+  }
+
+  const bool has_warning =
+      state.left_status == DepartureStatus::WARNING ||
+      state.right_status == DepartureStatus::WARNING;
+
+  // OpenCV uses BGR order.
+  const cv::Scalar safe_fill_color(0, 180, 0);
+  const cv::Scalar warning_fill_color(0, 165, 255);
+
+  const cv::Scalar fill_color =
+      has_warning
+          ? warning_fill_color
+          : safe_fill_color;
+
+  const cv::Vec4i &left = state.left_lane.value();
+  const cv::Vec4i &right = state.right_lane.value();
+
+  std::vector<cv::Point> lane_polygon{
+      cv::Point(left[0], left[1]),
+      cv::Point(left[2], left[3]),
+      cv::Point(right[2], right[3]),
+      cv::Point(right[0], right[1])
+  };
+
+  cv::Mat shading_layer = frame.clone();
+
+  cv::fillConvexPoly(
+      shading_layer,
+      lane_polygon,
+      fill_color,
+      cv::LINE_AA
+  );
+
+  constexpr double shading_opacity = 0.20;
+
+  cv::addWeighted(
+      shading_layer,
+      shading_opacity,
+      frame,
+      1.0 - shading_opacity,
+      0.0,
+      frame
+  );
+}
+
 void LaneDeparture::draw_overlay(const LaneState &state, cv::Mat &frame) {
+  // Shade first so lane lines and warning symbols remain visible.
+  shade_lane_region(state, frame);
+
   const cv::Scalar center_lane_color(246, 191, 3);
   const cv::Scalar warning_lane_color(41, 139, 252);
   const cv::Scalar departure_lane_color(26, 43, 251);
+  const cv::Scalar estimated_lane_color(180, 180, 180);
   const cv::Scalar car_center_color(219, 48, 134);
 
   // Helper lambda to map status to color
@@ -235,9 +527,41 @@ void LaneDeparture::draw_overlay(const LaneState &state, cv::Mat &frame) {
 
   // Draw Right Lane
   if (state.right_lane.has_value()) {
-    auto l = state.right_lane.value();
-    cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), get_color(state.right_status), 5, cv::LINE_AA);
+  const cv::Vec4i &lane = state.right_lane.value();
+
+  const cv::Scalar right_lane_color =
+      state.right_lane_estimated
+          ? estimated_lane_color
+          : get_color(state.right_status);
+
+  const int thickness =
+      state.right_lane_estimated ? 3 : 5;
+
+  cv::line(
+      frame,
+      cv::Point(lane[0], lane[1]),
+      cv::Point(lane[2], lane[3]),
+      right_lane_color,
+      thickness,
+      cv::LINE_AA
+  );
+
+  if (state.right_lane_estimated) {
+    cv::putText(
+        frame,
+        "Estimated right lane",
+        cv::Point(
+            std::max(10, lane[2] - 80),
+            std::max(25, lane[3] - 10)
+        ),
+        cv::FONT_HERSHEY_SIMPLEX,
+        0.45,
+        estimated_lane_color,
+        1,
+        cv::LINE_AA
+    );
   }
+}
 
   // Draw Circle to reference where the car is at.
   cv::circle(frame, cv::Point(state.x_lane_center, frame.rows - 50), 8, car_center_color, -1);

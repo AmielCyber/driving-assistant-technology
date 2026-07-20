@@ -10,6 +10,8 @@ void LaneStateLogger::log_lane_departure_status(const LaneState &state) {
   << frame_number << ','
   << detected_left_lane << ','
   << detected_right_lane << ','
+  << state.left_lane_estimated << ','
+  << state.right_lane_estimated << ','
   << left_lane_status << ','
   << right_lane_status << '\n';
 

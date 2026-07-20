@@ -14,6 +14,9 @@ class LaneState {
   // {x_bottom, y_bottom, x_top, y_top}
   std::optional<cv::Vec4i> left_lane;
   std::optional<cv::Vec4i> right_lane;
+  // True only when a lane was inferred rather than directly detected.
+  bool left_lane_estimated{false};
+  bool right_lane_estimated{false};
 
   int x_lane_center{0};
   int x_car_center{0};
