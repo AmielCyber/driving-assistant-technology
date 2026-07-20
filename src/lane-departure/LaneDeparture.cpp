@@ -9,8 +9,14 @@ cv::Mat LaneDeparture::process(cv::Mat &frame) {
   cv::cvtColor(frame, hls, cv::COLOR_BGR2HLS);                    // HLS Conversion
   const cv::Mat yellow_mask = apply_yellow_orange_lane_mask(hls); // Extract Yellow-Orange
   const cv::Mat white_mask = apply_white_lane_mask(hls);          // Extract Dark White
-  cv::bitwise_or(yellow_mask, white_mask, combined_mask);         // Combine yellow-orange & white imagee
-  cv::bitwise_and(frame, frame, masked_frame, combined_mask);     // Combine yellow_white w/ original
+
+  cv::bitwise_or(yellow_mask, white_mask, combined_mask);
+  // Applying binary smoothing to smooth out the lanes.
+  // https://docs.opencv.org/5.0/tutorials/imgproc/opening_closing_hats/opening_closing_hats.html
+  cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 10));
+  cv::morphologyEx(combined_mask, combined_mask, cv::MORPH_CLOSE, kernel);
+
+  cv::bitwise_and(frame, frame, masked_frame, combined_mask);
 
   const cv::Mat canny_frame = apply_canny_edge_detection(masked_frame); // Perform Canny Edge
   const cv::Mat roi_frame = apply_region_of_interest(canny_frame);      // Perform Region of Interest (ROI)
@@ -45,13 +51,15 @@ cv::Mat LaneDeparture::apply_white_lane_mask(const cv::Mat &hls_frame) {
 
 cv::Mat LaneDeparture::apply_canny_edge_detection(const cv::Mat &frame) {
   // Optimal Parameters from Assignment 4 Problem 2 for finding lanes
-  constexpr double lower_thresh = 10;
-  constexpr double upper_thresh = 50;
   const auto kernel_size = cv::Size(5, 5);
   cv::Mat gray, blur, canny_frame;
 
   cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
   cv::GaussianBlur(gray, blur, kernel_size, 0);
+
+  cv::Mat tmp;
+  const double upper_thresh = cv::threshold(blur, tmp, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+  const double lower_thresh = upper_thresh * 0.5;
   cv::Canny(blur, canny_frame, lower_thresh, upper_thresh);
   return canny_frame;
 }
@@ -91,9 +99,9 @@ std::vector<cv::Point> LaneDeparture::get_trapezoid_roi(const int height, const 
 std::vector<cv::Vec4i> LaneDeparture::get_probabilistic_hough_lines(const cv::Mat &roi_frame) {
   // Optimal Parameters from Assignment 4 Problem 2 for finding lanes
   constexpr double theta = CV_PI / 180;
-  constexpr double threshold = 60;
+  constexpr double threshold = 30;
   constexpr double min_line_length = 15;
-  constexpr double max_line_gap = 20;
+  constexpr double max_line_gap = 300;
 
   std::vector<cv::Vec4i> segments;
   cv::HoughLinesP(roi_frame, segments, 1, theta, threshold, min_line_length, max_line_gap);
@@ -111,11 +119,11 @@ LaneState LaneDeparture::analyze_lane(const std::vector<cv::Vec4i> &lines, const
   // Separate lines into left and right line candidates
   auto [left_lines, right_lines] = separate_lanes(lines, state.x_car_center);
 
-  // 2. Filter out outer lanes/bike lanes by clustering around closest x-intercept
+  // Filter out outer lanes/bike lanes by clustering around closest x-intercept
   state.left_lane = calculate_closest_lane(left_lines, y_bottom, y_top, state.x_car_center, width);
   state.right_lane = calculate_closest_lane(right_lines, y_bottom, y_top, state.x_car_center, width);
 
-  // 3. Calculate lane center
+  // Calculate lane center
   if (state.left_lane && state.right_lane) {
     const int left_bottom_x = state.left_lane.value()[0];
     const int right_bottom_x = state.right_lane.value()[0];
@@ -124,7 +132,7 @@ LaneState LaneDeparture::analyze_lane(const std::vector<cv::Vec4i> &lines, const
     state.x_lane_center = state.x_car_center;
   }
 
-  // 4. Evaluate departure status based on percentage of frame width
+  // Evaluate departure status based on percentage of frame width
   evaluate_departure_status(state);
 
   return state;
@@ -133,21 +141,25 @@ LaneState LaneDeparture::analyze_lane(const std::vector<cv::Vec4i> &lines, const
 std::pair<std::vector<cv::Vec4i>, std::vector<cv::Vec4i>>
 LaneDeparture::separate_lanes(const std::vector<cv::Vec4i> &lines, const int car_center_x) {
   std::vector<cv::Vec4i> left_lines, right_lines;
-  constexpr double min_slope_threshold = 0.4;
+  constexpr double min_slope_threshold = 0.40;
 
   for (const auto &l : lines) {
     const double x1 = l[0], y1 = l[1], x2 = l[2], y2 = l[3];
+    double dx = x2 - x1;
     if (x1 == x2)
-      continue;
-
-    const double slope = (y2 - y1) / (x2 - x1);
+      // Avoid division by zero
+        // May change if i get too many false positives
+      dx = 0.0001;
+    const double slope = (y2 - y1) / dx;
     if (std::abs(slope) < min_slope_threshold)
       continue;
 
     if (slope < 0 && x1 < car_center_x && x2 < car_center_x) {
+      //  /  x_center
       // Estimated Left lane contender
       left_lines.push_back(l);
     } else if (slope > 0 && x1 > car_center_x && x2 > car_center_x) {
+      //  x_center  \
       // Estimated right lane contender
       right_lines.push_back(l);
     }
@@ -155,47 +167,53 @@ LaneDeparture::separate_lanes(const std::vector<cv::Vec4i> &lines, const int car
   return {left_lines, right_lines};
 }
 
-std::optional<cv::Vec4i> LaneDeparture::calculate_closest_lane(const std::vector<cv::Vec4i> &lines, const int y_bottom,
-                                                               const int y_top, const int car_center_x,
+// https://learning.oreilly.com/library/view/applied-deep-learning/9781838646301/e5a39ce5-e62a-44a1-827e-6da9ab20ff70.xhtml#uuid-efab72e9-73f7-43ef-9d14-46225fd65ed9
+// Optimizing the detected road markings
+std::optional<cv::Vec4i> LaneDeparture::calculate_closest_lane(const std::vector<cv::Vec4i> &lines, const int y_bottom_limit,
+                                                               const int y_top_limit, const int car_center_x,
                                                                const int width) const {
   if (lines.empty())
     return std::nullopt;
 
   std::vector<LineData> processed_lines;
   // Target distance line  & bottom_x to achieve the closest lane
-  // in case there are other lanes such as sidewalk, bike lane and others
+  // in case there are other lanes such as sidewalk, bike lane and other lanes not in the current one
   double closest_distance = std::numeric_limits<double>::max();
   int target_bottom_x = 0;
 
   // Convert each line segment into slope intercept form
   for (const auto &line : lines) {
+    // m = (y2-y1)/(x2-x1)
     const double slope = static_cast<double>(line[3] - line[1]) / (line[2] - line[0]);
+    // b = y1 - m * x1
     const double intercept = line[1] - slope * line[0];
+    // d = sqrt((x^2-x^1)+(y^2-y^1))
     // Replaced sqrt(x2 - y2) for better performance
     const double length = std::hypot(line[3] - line[1], line[2] - line[0]);
     // Compute where line starts from ROI aka dashboard
-    const int bottom_x = static_cast<int>((y_bottom - intercept) / slope);
+    const int bottom_x = static_cast<int>((y_bottom_limit - intercept) / slope);
 
     processed_lines.emplace_back(slope, intercept, length, bottom_x);
 
-    double distance_to_center = std::abs(car_center_x - bottom_x);
-    if (distance_to_center < closest_distance) {
+    if (const double distance_to_center = std::abs(car_center_x - bottom_x); distance_to_center < closest_distance) {
       // Found a closer line towards the center
       closest_distance = distance_to_center;
       target_bottom_x = bottom_x;
     }
   }
   // Convert cluster threshold percentage to actual pixel margin for this resolution
-  // Cluster lines to determine which lines belong to the other same lines
+  // Cluster lines to determine which lines belong to the other same lines (merge lines together)
   const double cluster_pixel_threshold = width * line_cluster_threshold_ratio;
   double slope_sum = 0, intercept_sum = 0, weight = 0;
 
-  // Get weighted average of all lines to get a smooth line
+  // Get weighted average of all lines to get a smooth line to approximate actual lane
+  // average_slop_intercept
+  //    ////// ->    /
   for (const auto &line : processed_lines) {
     if (std::abs(line.bottom_x - target_bottom_x) <= cluster_pixel_threshold) {
       slope_sum += line.slope * line.length;
       intercept_sum += line.intercept * line.length;
-      weight += line.length;
+      weight += line.length;  // To get average slope and intercept
     }
   }
 
@@ -206,10 +224,15 @@ std::optional<cv::Vec4i> LaneDeparture::calculate_closest_lane(const std::vector
   const double m = slope_sum / weight;
   const double b = intercept_sum / weight;
 
-  const int x_bottom = static_cast<int>((y_bottom - b) / m);
-  const int x_top = static_cast<int>((y_top - b) / m);
+  // y = mx + b -> x = (y-b)/m
+  const int x_bottom = static_cast<int>((y_bottom_limit - b) / m);
+  const int x_top = static_cast<int>((y_top_limit - b) / m);
 
-  return cv::Vec4i(x_bottom, y_bottom, x_top, y_top);
+  //    (x_t, y_t)
+  //        |
+  //        |
+  //    (x_b, y_b)
+  return cv::Vec4i(x_bottom, y_bottom_limit, x_top, y_top_limit);
 }
 
 void LaneDeparture::draw_overlay(const LaneState &state, cv::Mat &frame) {
@@ -290,18 +313,18 @@ void LaneDeparture::evaluate_departure_status(LaneState &state) const {
 // GPT GENERATED CODE: in C++ opencv 4 how I can draw a small triangle with the character '!' in red in the middle of
 // frame
 void LaneDeparture::draw_alert_triangle(cv::Mat &frame) {
-  const cv::Point center(frame.cols / 2, frame.rows / 2);
+  const cv::Point center(frame.cols / 2, frame.rows / 2); // Calculate center point
   const cv::Scalar color(0, 0, 255);
-  const int size = 50, thickness = 2;
-  const int hw = static_cast<int>(size * 0.9);
+  constexpr int size = 50, thickness = 2;
+  constexpr int hw = static_cast<int>(size * 0.9); // Horizontal width
 
-  // 1. Draw Triangle
-  std::vector<cv::Point> pts = {
+  // Draw Triangle
+  const std::vector<cv::Point> pts = {
       {center.x, center.y - size}, {center.x - hw, center.y + size / 2}, {center.x + hw, center.y + size / 2}};
   cv::polylines(frame, std::vector<std::vector<cv::Point>>{pts}, true, color, thickness, cv::LINE_AA);
 
-  // 2. Draw Exclamation Mark
-  double fontScale = std::max(0.5, size / 33.0);
+  // Draw Exclamation Mark
+  constexpr double fontScale = std::max(0.5, size / 33.0);
   int baseline = 0;
   cv::Size sz = cv::getTextSize("!", cv::FONT_HERSHEY_DUPLEX, fontScale, thickness, &baseline);
   cv::putText(frame, "!", {center.x - sz.width / 2, center.y + sz.height / 2}, cv::FONT_HERSHEY_DUPLEX, fontScale,

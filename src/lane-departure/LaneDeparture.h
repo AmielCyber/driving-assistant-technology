@@ -37,8 +37,8 @@ private:
   [[nodiscard]] LaneState analyze_lane(const std::vector<cv::Vec4i> &lines, int width, int height) const;
   static std::pair<std::vector<cv::Vec4i>, std::vector<cv::Vec4i>>
   separate_lanes(const std::vector<cv::Vec4i> &lines, int car_center_x);
-  [[nodiscard]] std::optional<cv::Vec4i> calculate_closest_lane(const std::vector<cv::Vec4i> &lines, int y_bottom,
-                                                                int y_top, int car_center_x, int width) const;
+  [[nodiscard]] std::optional<cv::Vec4i> calculate_closest_lane(const std::vector<cv::Vec4i> &lines, int y_bottom_limit,
+                                                                int y_top_limit, int car_center_x, int width) const;
   void evaluate_departure_status(LaneState &state) const;
   void draw_overlay(const LaneState &state, cv::Mat &frame);
   static void draw_alert_triangle(cv::Mat& frame);
