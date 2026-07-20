@@ -126,7 +126,7 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
     std::string feature;
     while (std::getline(ss, feature, ',')) {
       if (feature == "lanes") {
-        config.features.push_back(std::make_shared<LaneDeparture>());
+        config.features.push_back(std::make_shared<LaneDeparture>(has_log));
       } else if (feature == "objects") {
         /************* Object Detection Implementation HERE ******************/
         const std::string model_path = "data/Object-Detection/best.onnx";

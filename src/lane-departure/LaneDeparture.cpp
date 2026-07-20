@@ -1,7 +1,13 @@
 #include "LaneDeparture.h"
 
-#include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
+LaneDeparture::LaneDeparture(const bool log_data) {
+  if (log_data) {
+    lane_state_logger.emplace("lane-departure.csv",
+                   "frame-number,predicted-left-lane,predicted-right-lane,predicted-left-status,predicted-right-status");
+
+  }
+}
 
 cv::Mat LaneDeparture::process(cv::Mat &frame) {
   cv::Mat hls, combined_mask, masked_frame;
@@ -22,9 +28,10 @@ cv::Mat LaneDeparture::process(cv::Mat &frame) {
   const cv::Mat roi_frame = apply_region_of_interest(canny_frame);      // Perform Region of Interest (ROI)
   const std::vector<cv::Vec4i> hough_lines = get_probabilistic_hough_lines(roi_frame); // Perform HoughP
   const LaneState state = analyze_lane(hough_lines, frame.cols, frame.rows);           // Get Lane State
-  // lane_state_logger.log_lane_departure_status(state);
   draw_overlay(state, frame); // Draw Annotations based on the lane state
-
+  if (lane_state_logger.has_value()) {
+    lane_state_logger->log_lane_departure_status(state);
+  }
   return frame;
 }
 
@@ -148,7 +155,7 @@ LaneDeparture::separate_lanes(const std::vector<cv::Vec4i> &lines, const int car
     double dx = x2 - x1;
     if (x1 == x2)
       // Avoid division by zero
-        // May change if i get too many false positives
+      // May change if i get too many false positives
       dx = 0.0001;
     const double slope = (y2 - y1) / dx;
     if (std::abs(slope) < min_slope_threshold)
@@ -169,9 +176,9 @@ LaneDeparture::separate_lanes(const std::vector<cv::Vec4i> &lines, const int car
 
 // https://learning.oreilly.com/library/view/applied-deep-learning/9781838646301/e5a39ce5-e62a-44a1-827e-6da9ab20ff70.xhtml#uuid-efab72e9-73f7-43ef-9d14-46225fd65ed9
 // Optimizing the detected road markings
-std::optional<cv::Vec4i> LaneDeparture::calculate_closest_lane(const std::vector<cv::Vec4i> &lines, const int y_bottom_limit,
-                                                               const int y_top_limit, const int car_center_x,
-                                                               const int width) const {
+std::optional<cv::Vec4i> LaneDeparture::calculate_closest_lane(const std::vector<cv::Vec4i> &lines,
+                                                               const int y_bottom_limit, const int y_top_limit,
+                                                               const int car_center_x, const int width) const {
   if (lines.empty())
     return std::nullopt;
 
@@ -213,7 +220,7 @@ std::optional<cv::Vec4i> LaneDeparture::calculate_closest_lane(const std::vector
     if (std::abs(line.bottom_x - target_bottom_x) <= cluster_pixel_threshold) {
       slope_sum += line.slope * line.length;
       intercept_sum += line.intercept * line.length;
-      weight += line.length;  // To get average slope and intercept
+      weight += line.length; // To get average slope and intercept
     }
   }
 

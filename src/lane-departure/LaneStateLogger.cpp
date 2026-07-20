@@ -1,18 +1,19 @@
 #include "LaneStateLogger.h"
-#include <iostream>
 
+LaneStateLogger::LaneStateLogger(const std::string &filename, std::string_view header): logger(filename, header) {
+}
 void LaneStateLogger::log_lane_departure_status(const LaneState &state) {
-  const auto detected_left_lane = state.left_lane.has_value();
-  const auto detected_right_lane = state.right_lane.has_value();
+  const auto detected_left_lane = std::to_string(state.left_lane.has_value());
+  const auto detected_right_lane = std::to_string(state.right_lane.has_value());
   const auto left_lane_status = get_string_lane_status(state.left_status);
   const auto right_lane_status = get_string_lane_status(state.right_status);
-  std::cout
-  << frame_number << ','
-  << detected_left_lane << ','
-  << detected_right_lane << ','
-  << left_lane_status << ','
-  << right_lane_status << '\n';
+  const std::string line = std::to_string(frame_number) + ',' +
+                       detected_left_lane + ',' +
+                       detected_right_lane + ',' +
+                       get_string_lane_status(state.left_status) + ',' +
+                       get_string_lane_status(state.right_status);
 
+  logger.write(line);
   ++frame_number;
 }
 std::string LaneStateLogger::get_string_lane_status(const DepartureStatus &departure_status) {
