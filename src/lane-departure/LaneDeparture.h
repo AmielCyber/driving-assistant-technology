@@ -17,6 +17,8 @@ public:
   explicit LaneDeparture(bool log_data=false);
 
 private:
+  std::optional<LaneStateLogger> lane_state_logger;
+  LaneState lane_state;
   std::string name{"Lane Departure Warning System"};
   // Hard Coded Image Location Ratios
   const double horizon_y_ratio{0.60};
@@ -28,7 +30,6 @@ private:
   const double alert_threshold_from_center_ratio{0.15};
   // Threshold to select a line out of a cluster of lines from houghP
   double line_cluster_threshold_ratio{0.04};
-  std::optional<LaneStateLogger> lane_state_logger;
 
   static cv::Mat apply_yellow_orange_lane_mask(const cv::Mat &hls_frame);
   static cv::Mat apply_white_lane_mask(const cv::Mat &hls_frame);
@@ -36,7 +37,7 @@ private:
   [[nodiscard]] cv::Mat apply_region_of_interest(const cv::Mat &canny_frame) const;
   [[nodiscard]] std::vector<cv::Point> get_trapezoid_roi(int height, int width) const;
   static std::vector<cv::Vec4i> get_probabilistic_hough_lines(const cv::Mat &roi_frame);
-  [[nodiscard]] LaneState analyze_lane(const std::vector<cv::Vec4i> &lines, int width, int height) const;
+  [[nodiscard]] LaneState analyze_lane(const std::vector<cv::Vec4i> &lines, int width, int height) ;
   static std::pair<std::vector<cv::Vec4i>, std::vector<cv::Vec4i>> separate_lanes(const std::vector<cv::Vec4i> &lines,
                                                                                   int car_center_x);
   [[nodiscard]] std::optional<cv::Vec4i> calculate_closest_lane(const std::vector<cv::Vec4i> &lines, int y_bottom_limit,

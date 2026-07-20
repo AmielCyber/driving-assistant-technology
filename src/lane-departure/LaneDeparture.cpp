@@ -115,34 +115,59 @@ std::vector<cv::Vec4i> LaneDeparture::get_probabilistic_hough_lines(const cv::Ma
   return segments;
 }
 
-LaneState LaneDeparture::analyze_lane(const std::vector<cv::Vec4i> &lines, const int width, const int height) const {
-  LaneState state;
-  state.x_car_center = static_cast<int>(car_x_center_ratio * width);
+LaneState LaneDeparture::analyze_lane(const std::vector<cv::Vec4i> &lines, const int width, const int height) {
+  lane_state.reset();
+
+
+  lane_state.x_car_center = static_cast<int>(car_x_center_ratio * width);
 
   // Convert percentage ratios to actual Y-pixel coordinates
   const int y_top = static_cast<int>(height * horizon_y_ratio);
   const int y_bottom = static_cast<int>(height * dashboard_y_ratio);
 
   // Separate lines into left and right line candidates
-  auto [left_lines, right_lines] = separate_lanes(lines, state.x_car_center);
+  auto [left_lines, right_lines] = separate_lanes(lines, lane_state.x_car_center);
 
   // Filter out outer lanes/bike lanes by clustering around closest x-intercept
-  state.left_lane = calculate_closest_lane(left_lines, y_bottom, y_top, state.x_car_center, width);
-  state.right_lane = calculate_closest_lane(right_lines, y_bottom, y_top, state.x_car_center, width);
+  lane_state.left_lane = calculate_closest_lane(left_lines, y_bottom, y_top, lane_state.x_car_center, width);
+  lane_state.right_lane = calculate_closest_lane(right_lines, y_bottom, y_top, lane_state.x_car_center, width);
+
+  if (lane_state.left_lane.has_value()) {
+    LaneState::remember_lane(lane_state.previous_left_lanes, lane_state.left_lane.value());
+  }
+  if (lane_state.right_lane.has_value()) {
+    LaneState::remember_lane(lane_state.previous_right_lanes, lane_state.right_lane.value());
+  }
+
+  // XOR
+  if (lane_state.left_lane.has_value() != lane_state.right_lane.has_value()) {
+    if (!lane_state.left_lane.has_value()) {
+      lane_state.left_lane = LaneState::estimate_lane(lane_state.previous_left_lanes);
+      if (lane_state.left_lane.has_value()) {
+        lane_state.left_lane_estimate = true;
+      }
+    }
+    else {
+      lane_state.right_lane = LaneState::estimate_lane(lane_state.previous_right_lanes);
+      if (lane_state.right_lane.has_value()) {
+        lane_state.right_lane_estimate = true;
+      }
+    }
+  }
 
   // Calculate lane center
-  if (state.left_lane && state.right_lane) {
-    const int left_bottom_x = state.left_lane.value()[0];
-    const int right_bottom_x = state.right_lane.value()[0];
-    state.x_lane_center = (left_bottom_x + right_bottom_x) / 2;
+  if (lane_state.left_lane && lane_state.right_lane) {
+    const int left_bottom_x = lane_state.left_lane.value()[0];
+    const int right_bottom_x = lane_state.right_lane.value()[0];
+    lane_state.x_lane_center = (left_bottom_x + right_bottom_x) / 2;
   } else {
-    state.x_lane_center = state.x_car_center;
+    lane_state.x_lane_center = lane_state.x_car_center;
   }
 
   // Evaluate departure status based on percentage of frame width
-  evaluate_departure_status(state);
+  evaluate_departure_status(lane_state);
 
-  return state;
+  return lane_state;
 }
 
 std::pair<std::vector<cv::Vec4i>, std::vector<cv::Vec4i>>
@@ -246,6 +271,7 @@ void LaneDeparture::draw_overlay(const LaneState &state, cv::Mat &frame) {
   const cv::Scalar center_lane_color(246, 191, 3);
   const cv::Scalar warning_lane_color(41, 139, 252);
   const cv::Scalar departure_lane_color(26, 43, 251);
+  const cv::Scalar estimate_lane_color(151, 157, 170);
   const cv::Scalar car_center_color(219, 48, 134);
 
   shade_lane_region(state, frame);
@@ -261,13 +287,15 @@ void LaneDeparture::draw_overlay(const LaneState &state, cv::Mat &frame) {
   // Draw Left Lane
   if (state.left_lane.has_value()) {
     auto l = state.left_lane.value();
-    cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), get_color(state.left_status), 5, cv::LINE_AA);
+    const auto color = state.left_lane_estimate? estimate_lane_color : get_color(state.left_status);
+    cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), color, 5, cv::LINE_AA);
   }
 
   // Draw Right Lane
   if (state.right_lane.has_value()) {
     auto l = state.right_lane.value();
-    cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), get_color(state.right_status), 5, cv::LINE_AA);
+    const auto color = state.right_lane_estimate? estimate_lane_color : get_color(state.right_status);
+    cv::line(frame, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), color, 5, cv::LINE_AA);
   }
 
   // Draw Circle to reference where the car is at.
