@@ -24,7 +24,8 @@ class YOLOVideoDetector : public ADASFeature
 {
 public:
     YOLOVideoDetector(const std::string& modelPath,
-                      const std::string& classFilePath);
+                      const std::string& classFilePath,
+                      bool log_data=false);
 
     cv::Mat process(cv::Mat &frame) override;
     std::string get_feature_name() override;
