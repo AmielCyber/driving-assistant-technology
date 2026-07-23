@@ -7,6 +7,11 @@
 #ifdef __APPLE__
 #include <coreml_provider_factory.h>
 #endif
+/********** CUDA MODIFIED **************/
+#if defined(__linux__) && defined(USE_CUDA)
+#include <cuda_provider_factory.h>
+#endif
+/********** CUDA MODIFIED **************/
 
 using namespace cv;
 using namespace std;
@@ -136,15 +141,22 @@ void YOLOVideoDetector::loadModel(const std::string& modelPath)
         OrtSessionOptionsAppendExecutionProvider_CoreML(
             sessionOptions, 0));
 
+  /********** CUDA MODIFIED **************/
 #elif defined(__linux__) && defined(USE_CUDA)
-    // NVIDIA GPU (Jetson / Linux with CUDA)
+  // NVIDIA GPU (Jetson / Linux with CUDA)
+  try {
     OrtCUDAProviderOptions cuda_options{};
     cuda_options.device_id = 0;
 
-    Ort::ThrowOnError(
-        OrtSessionOptionsAppendExecutionProvider_CUDA(
-            sessionOptions, &cuda_options));
-
+    // Clean C++ API method to append CUDA Provider
+    sessionOptions.AppendExecutionProvider_CUDA(cuda_options);
+    std::cout << "Execution Provider: CUDA" << std::endl;
+  }
+  catch (const std::exception& e) {
+    std::cerr << "Warning: Failed to initialize CUDA provider ("
+              << e.what() << "). Falling back to CPU execution.\n";
+  }
+  /********** CUDA MODIFIED **************/
 #else
     // CPU only (Ubuntu VM, generic Linux, etc.)
     std::cout << "Execution Provider: CPU" << std::endl;
