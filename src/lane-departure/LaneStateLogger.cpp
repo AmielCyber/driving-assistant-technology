@@ -3,8 +3,8 @@
 LaneStateLogger::LaneStateLogger(const std::string &filename, std::string_view header): logger(filename, header) {
 }
 void LaneStateLogger::log_lane_departure_status(const LaneState &state) {
-  const auto detected_left_lane = std::to_string(state.left_lane.has_value());
-  const auto detected_right_lane = std::to_string(state.right_lane.has_value());
+  const auto detected_left_lane = state.left_lane.has_value()? "TRUE": "FALSE";
+  const auto detected_right_lane = state.right_lane.has_value()? "TRUE": "FALSE";
   const auto left_lane_status = get_string_lane_status(state.left_status);
   const auto right_lane_status = get_string_lane_status(state.right_status);
   const std::string line = std::to_string(frame_number) + ',' +

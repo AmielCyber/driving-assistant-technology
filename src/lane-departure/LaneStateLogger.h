@@ -5,7 +5,7 @@
 
 
 class LaneStateLogger {
-  long frame_number{0};
+  long frame_number{1};
   AsyncLogger logger;
   public:
   LaneStateLogger(const std::string& filename, std::string_view header);
