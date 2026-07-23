@@ -18,7 +18,20 @@ else ()
     # Warnings, Extra warnings, warnings if not using C++ standards, level 3 optimization
     add_compile_options(-Wall -Wextra -Wpedantic -O3)
 endif ()
+# CUDA Support Enabled
+# /********** CUDA MODIFIED **************/
+option(USE_CUDA "Enable CUDA Execution Provider for ONNX Runtime" ON)
 
+if (USE_CUDA)
+    find_package(CUDAToolkit QUIET)
+    add_compile_definitions(USE_CUDA)
+    if (CUDAToolkit_FOUND)
+        message(STATUS "CUDA Toolkit found: ${CUDAToolkit_VERSION}")
+    else()
+        message(STATUS "CUDA Toolkit search skipped/not found; enabling USE_CUDA define for ONNX Runtime.")
+    endif()
+endif()
+# /********** CUDA MODIFIED **************/
 
 # -------------------------------------------------------
 # OpenCV
