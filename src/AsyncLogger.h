@@ -1,3 +1,4 @@
+/**************************** LLM GENERATED CODE ********************************************************/
 /**
 * GPT GENERATED CODE with Previous LaneStateLogger.h and LaneStateLogger.cpp passed as upload with the following
  * prompt:
@@ -47,3 +48,4 @@ private:
 };
 
 #endif // ASYNC_LOGGER_H
+/**************************** END LLM GENERATED CODE ********************************************************/

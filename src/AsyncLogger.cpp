@@ -1,5 +1,7 @@
+
+/**************************** LLM GENERATED CODE ********************************************************/
 /**
-* GPT GENERATED CODE with Previous LaneStateLogger.h and LaneStateLogger.cpp passed as upload with the following
+* Chat GPT GENERATED CODE with Previous LaneStateLogger.h and LaneStateLogger.cpp passed as upload with the following
  * prompt:
  * "Can you reformat this class to do logging to a file without blocking code. Make it more general for other
  * classes to use by having a print (or a better name for writing to file), function that takes an std::string_view and
@@ -74,3 +76,4 @@ void AsyncLogger::process_queue() {
     log_file_.flush();
   }
 }
+/**************************** END LLM GENERATED CODE ********************************************************/

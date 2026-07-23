@@ -88,18 +88,18 @@ cv::Mat LaneDeparture::apply_region_of_interest(const cv::Mat &canny_frame) cons
   return masked_frame;
 }
 
-std::vector<cv::Point> LaneDeparture::get_trapezoid_roi(const int height, const int width) const {
-  const int trapezoid_top = static_cast<int>(height * horizon_y_ratio);
-  const int trapezoid_bottom = static_cast<int>(height * dashboard_y_ratio);
+std::vector<cv::Point> LaneDeparture::get_trapezoid_roi(const int frame_height, const int frame_width) const {
+  const int trapezoid_top = static_cast<int>(frame_height * horizon_y_ratio);
+  const int trapezoid_bottom = static_cast<int>(frame_height * dashboard_y_ratio);
   return std::vector<cv::Point>{
       // Bottom-Left Point
-      {static_cast<int>(width * 0.05), trapezoid_bottom},
+      {static_cast<int>(frame_width * 0.05), trapezoid_bottom},
       // Top-Left Point
-      {static_cast<int>(width * 0.45), trapezoid_top},
+      {static_cast<int>(frame_width * 0.45), trapezoid_top},
       // Top-Right Point
-      {static_cast<int>(width * 0.55), trapezoid_top},
+      {static_cast<int>(frame_width * 0.55), trapezoid_top},
       // Bottom-Right Point
-      {static_cast<int>(width * 0.95), trapezoid_bottom},
+      {static_cast<int>(frame_width * 0.95), trapezoid_bottom},
   };
 }
 

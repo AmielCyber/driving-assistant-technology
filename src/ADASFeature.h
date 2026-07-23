@@ -2,7 +2,6 @@
 #define ADAS_FEATURE_H
 #include <opencv2/core/mat.hpp>
 #include <string>
-#include <queue>
 
 /**
  * ADAS Feature that each our feature will implement in order

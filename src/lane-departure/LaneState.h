@@ -25,6 +25,9 @@ public:
   DepartureStatus left_status{DepartureStatus::SAFE};
   DepartureStatus right_status{DepartureStatus::SAFE};
 
+  /**
+   * Helper function to reset lane when reusing a LaneState in order to remember previous lanes and perform an estimate.
+   */
   void reset() {
     left_lane.reset();
     right_lane.reset();
@@ -34,6 +37,11 @@ public:
     right_status = DepartureStatus::SAFE;
   }
 
+  /**
+   * Remembers the passed lane and places it in the history of lanes list.
+   * @param history The history of previous lines that were classify as lanes.
+   * @param lane The lane to remember and store in history.
+   */
   static void remember_lane(std::deque<cv::Vec4i> &history, const cv::Vec4i &lane) {
     history.push_back(lane);
     if (history.size() > max_lane_history_frames) {
@@ -41,6 +49,11 @@ public:
     }
   }
 
+  /**
+   * Estimates a lane based on previous lanes by averaging all previous lanes to make the estimation.
+   * @param history The history list to perform an estimate.
+   * @return An estimated line based on the history.
+   */
   static std::optional<cv::Vec4i> estimate_lane(const std::deque<cv::Vec4i> &history) {
     if (history.empty())
       return std::nullopt;
