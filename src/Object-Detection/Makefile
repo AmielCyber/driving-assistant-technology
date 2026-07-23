@@ -2,35 +2,24 @@
 CXX = g++
 
 # Compiler flags
-CXXFLAGS = -std=c++17 -O2 -Wall -Wextra $(shell pkg-config --cflags opencv4)
+CXXFLAGS = -std=c++17 -O2 -Wall -Wextra
 
-# Libraries
-LDFLAGS = $(shell pkg-config --libs opencv4)
+# Source and target
+SRC = YOLO-Training.cpp
+TARGET = YOLO-Training
 
-# Programs
-PROGRAMS = YOLO-Training yolo11_video_demo yolo11_video_demo_threaded
+# Default target
+all: $(TARGET)
 
-all: $(PROGRAMS)
+$(TARGET): $(SRC)
+	$(CXX) $(CXXFLAGS) -o $(TARGET) $(SRC)
 
-YOLO-Training: YOLO-Training.cpp
-	$(CXX) $(CXXFLAGS) -o $@ $< $(LDFLAGS)
+# Run the program
+run: $(TARGET)
+	./$(TARGET)
 
-yolo11_demo: yolo11_video_demo.cpp
-	$(CXX) $(CXXFLAGS) -o $@ $< $(LDFLAGS)
-	
-yolo11_demo_threaded: yolo11_video_demo_threaded.cpp
-	$(CXX) $(CXXFLAGS) -o $@ $< $(LDFLAGS)
-
-run-training: YOLO-Training
-	./YOLO-Training
-
-run-demo: yolo11_demo
-	./yolo11_demo
-
-run-demo-threaded: yolo11_demo_threaded
-	./yolo11_demo_threaded
-
+# Remove generated files
 clean:
-	rm -f $(PROGRAMS)
+	rm -f $(TARGET)
 
-.PHONY: all clean run-training run-demo run-demo-threaded
+.PHONY: all run clean
