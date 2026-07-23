@@ -14,7 +14,8 @@ using namespace std;
 // Constructor using parameters
 YOLOVideoDetector::YOLOVideoDetector(
         const string& modelPath,
-        const string& classFilePath)
+        const string& classFilePath,
+        const bool log_data) // Control logging
     :
       env(ORT_LOGGING_LEVEL_WARNING, "YOLO"),
       memoryInfo(
@@ -25,19 +26,22 @@ YOLOVideoDetector::YOLOVideoDetector(
     loadClasses(classFilePath);
     loadModel(modelPath);
 
-    // Open the log
-    logFile.open("detections.csv");
-    // This is the structure
-    if (logFile.is_open())
-    {
-        logFile << "frame,class,confidence,"
-                << "center_x,center_y,"
-                << "left,top,width,height,"
-                << "frame_width,frame_height\n";
-    }
-    else // In case the log cannot be created
-    {
-        cerr << "Cannot open detections.csv for writing.\n";
+    // Do log just if it is required by the user
+    if (log_data) {
+        // Open the log
+        logFile.open("detections.csv");
+        // This is the structure
+        if (logFile.is_open())
+        {
+            logFile << "frame,class,confidence,"
+                    << "center_x,center_y,"
+                    << "left,top,width,height,"
+                    << "frame_width,frame_height\n";
+        }
+        else // In case the log cannot be created
+        {
+            cerr << "Cannot open detections.csv for writing.\n";
+        }
     }
 }
 
@@ -172,7 +176,7 @@ cv::Mat YOLOVideoDetector::process(cv::Mat &frame)
     std::vector<cv::Rect> boxes; // Vector to store the boxes for each detected object
 
     // Temp Timer
-    int64 frameStart = cv::getTickCount();
+    //int64 frameStart = cv::getTickCount();
     
     // Launch the detection method and send the frame and recieve all the detected object info.
     detectObjects(frame, classIds, confidences, boxes);
@@ -209,7 +213,7 @@ cv::Mat YOLOVideoDetector::process(cv::Mat &frame)
     frameNumber++;   // next frame
     
     // Timer
-    double frameTime =
+    /*double frameTime =
         (cv::getTickCount() - frameStart) /
         cv::getTickFrequency();
 
@@ -218,7 +222,7 @@ cv::Mat YOLOVideoDetector::process(cv::Mat &frame)
         << frameTime * 1000
         << " ms   FPS: "
         << 1.0/frameTime
-        << "\n";
+        << "\n";*/
     
     return frame;
 }
