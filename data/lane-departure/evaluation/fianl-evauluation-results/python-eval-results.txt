@@ -1,0 +1,80 @@
+
+============================================================
+Left lane detection
+============================================================
+Accuracy:  0.9024
+Precision: 0.9247
+Recall:    0.9263
+F1 score:  0.9255
+
+Classification report:
+              precision    recall  f1-score   support
+
+ lane absent       0.86      0.86      0.86      2164
+lane present       0.92      0.93      0.93      4096
+
+    accuracy                           0.90      6260
+   macro avg       0.89      0.89      0.89      6260
+weighted avg       0.90      0.90      0.90      6260
+
+
+============================================================
+Right lane detection
+============================================================
+Accuracy:  0.8818
+Precision: 0.8652
+Recall:    0.9500
+F1 score:  0.9056
+
+Classification report:
+              precision    recall  f1-score   support
+
+ lane absent       0.91      0.78      0.84      2523
+lane present       0.87      0.95      0.91      3737
+
+    accuracy                           0.88      6260
+   macro avg       0.89      0.87      0.87      6260
+weighted avg       0.88      0.88      0.88      6260
+
+
+============================================================
+Left lane status
+============================================================
+              precision    recall  f1-score   support
+
+        safe     0.9734    0.9940    0.9836      6011
+     warning     0.1429    0.1765    0.1579        34
+       alert     0.7875    0.2930    0.4271       215
+
+    accuracy                         0.9655      6260
+   macro avg     0.6346    0.4878    0.5229      6260
+weighted avg     0.9625    0.9655    0.9600      6260
+
+Multiclass averages:
+Macro precision:    0.6346
+Macro recall:       0.4878
+Macro F1:           0.5229
+Weighted precision: 0.9625
+Weighted recall:    0.9655
+Weighted F1:        0.9600
+
+============================================================
+Right lane status
+============================================================
+              precision    recall  f1-score   support
+
+        safe     0.9846    0.9892    0.9869      6138
+     warning     0.4426    0.2213    0.2951       122
+       alert     0.0000    0.0000    0.0000         0
+
+    accuracy                         0.9743      6260
+   macro avg     0.4757    0.4035    0.4273      6260
+weighted avg     0.9740    0.9743    0.9734      6260
+
+Multiclass averages:
+Macro precision:    0.4757
+Macro recall:       0.4035
+Macro F1:           0.4273
+Weighted precision: 0.9740
+Weighted recall:    0.9743
+Weighted F1:        0.9734

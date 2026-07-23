@@ -3,7 +3,7 @@ CHAT GPT GENERATED CODE
 Prompt: 
     I have a csv table with this columns
 
-    frame-number,predicted-left-lane,Predicted-right-lane,predicted-left-status,predicted-right-status,actual-left-lane,actual-right-lane,actual-left-stat,actual-right-stat
+    frame-number,predicted-left-lane,predicted-right-lane,predicted-left-status,predicted-right-status,actual-left-lane,actual-right-lane,actual-left-stat,actual-right-stat
 
     with left-lane and right-lane containing a boolean value 
     and left-status and right-status containing safe, warning, and alert values
@@ -97,7 +97,7 @@ def display_confusion_matrix(
     )
 
     plt.title(title)
-    plt.xlabel("Predicted value")
+    plt.xlabel("predicted value")
     plt.ylabel("Actual value")
     plt.tight_layout()
     plt.savefig(output_path, dpi=150)
@@ -226,7 +226,7 @@ def main() -> None:
     required_columns = [
         "frame-number",
         "predicted-left-lane",
-        "Predicted-right-lane",
+        "predicted-right-lane",
         "predicted-left-status",
         "predicted-right-status",
         "actual-left-lane",
@@ -251,7 +251,7 @@ def main() -> None:
 
     boolean_columns = [
         "predicted-left-lane",
-        "Predicted-right-lane",
+        "predicted-right-lane",
         "actual-left-lane",
         "actual-right-lane",
     ]
@@ -280,7 +280,7 @@ def main() -> None:
     evaluate_binary_lane(
         dataframe=dataframe,
         actual_column="actual-right-lane",
-        predicted_column="Predicted-right-lane",
+        predicted_column="predicted-right-lane",
         lane_name="Right",
         output_directory=output_directory,
     )
