@@ -131,7 +131,7 @@ std::optional<AppConfig> parse_arguments(const int argc, char **argv) {
         /************* Object Detection Implementation HERE ******************/
         const std::string model_path = "data/Object-Detection/best.onnx";
         const std::string classes_path = "data/Object-Detection/classes.names";
-        config.features.push_back(std::make_shared<YOLOVideoDetector>(model_path, classes_path));
+        config.features.push_back(std::make_shared<YOLOVideoDetector>(model_path, classes_path, has_log));
         std::cout << "Object detection enabled\n";
       } else if (feature == "stops") {
         /************* Stop Sign Detection Implementation HERE ****************/
